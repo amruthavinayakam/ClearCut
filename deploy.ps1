@@ -17,6 +17,18 @@ param(
 
 $ErrorActionPreference = "Stop"
 
+# PowerShell does NOT throw when a native executable exits non-zero, so
+# $ErrorActionPreference alone lets a failed gcloud call sail past and the
+# script cheerfully reports success over a broken deploy. Check explicitly.
+function Assert-LastExitCode {
+    param([string]$What)
+    if ($LASTEXITCODE -ne 0) {
+        Write-Host "`n=== FAILED: $What (exit $LASTEXITCODE) ===" -ForegroundColor Red
+        Write-Host "Nothing was deployed. Fix the error above and re-run this script.`n"
+        exit 1
+    }
+}
+
 # gcloud on Windows often resolves to a stale Python 2. Point it at Python 3
 # before anything else, or every command below fails with a confusing error.
 if (-not $env:CLOUDSDK_PYTHON) {
@@ -52,7 +64,17 @@ try { gcloud secrets describe parallel-api-key 2>$null | Out-Null } catch { $sec
 if (-not $secretExists) {
     gcloud secrets create parallel-api-key --replication-policy=automatic
 }
-$ParallelApiKey | gcloud secrets versions add parallel-api-key --data-file=-
+# Write via a temp file with -NoNewline. Piping a string to a native command's
+# stdin in PowerShell appends CRLF, which lands *inside* the secret value; the
+# app then tries to send "key\r\n" as an HTTP header and httpx rejects it.
+$keyFile = New-TemporaryFile
+try {
+    [System.IO.File]::WriteAllText($keyFile.FullName, $ParallelApiKey.Trim())
+    gcloud secrets versions add parallel-api-key --data-file="$($keyFile.FullName)"
+    Assert-LastExitCode "storing the Parallel API key"
+} finally {
+    Remove-Item $keyFile.FullName -Force -ErrorAction SilentlyContinue
+}
 
 # --- Dedicated service account, least privilege.
 $saName = "clearance-radar-runner"
@@ -83,6 +105,23 @@ if ($GcsBucket) {
         --member="serviceAccount:$saEmail" --role="roles/storage.objectAdmin" | Out-Null
 }
 
+# --- Build-time permissions.
+# `gcloud run deploy --source` uploads the source to a bucket and has Cloud
+# Build read it back as the Compute Engine default service account. Projects
+# created after roughly mid-2024 no longer grant that account anything by
+# default, so the build fails with "does not have storage.objects.get access"
+# on the source archive the deploy itself just uploaded. `builds.builder`
+# bundles the source read, Artifact Registry write, and log write it needs.
+$projectNumber = gcloud projects describe $ProjectId --format="value(projectNumber)"
+Assert-LastExitCode "reading project number"
+$buildSa = "$projectNumber-compute@developer.gserviceaccount.com"
+
+Write-Host "-> Granting Cloud Build permissions to $buildSa..." -ForegroundColor Yellow
+gcloud projects add-iam-policy-binding $ProjectId `
+    --member="serviceAccount:$buildSa" --role="roles/cloudbuild.builds.builder" --condition=None | Out-Null
+gcloud projects add-iam-policy-binding $ProjectId `
+    --member="serviceAccount:$buildSa" --role="roles/logging.logWriter" --condition=None | Out-Null
+
 $envPairs = @(
     "GOOGLE_CLOUD_PROJECT=$ProjectId",
     "GOOGLE_CLOUD_LOCATION=$VertexLocation",
@@ -112,8 +151,10 @@ gcloud run deploy $Service `
     --max-instances 10 `
     --set-env-vars $envVars `
     --set-secrets "PARALLEL_API_KEY=parallel-api-key:latest"
+Assert-LastExitCode "building and deploying to Cloud Run"
 
 $url = gcloud run services describe $Service --region $Region --format="value(status.url)"
+Assert-LastExitCode "reading the deployed service URL"
 
 Write-Host "-> Wiring PUBLIC_BASE_URL so Monitor webhooks can reach us..." -ForegroundColor Yellow
 gcloud run services update $Service --region $Region `

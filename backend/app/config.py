@@ -12,7 +12,19 @@ load_dotenv()
 
 
 def _str(name: str, default: str = "") -> str:
-    return os.getenv(name, default)
+    """Read an env var, trimming surrounding whitespace.
+
+    The strip is load-bearing, not tidiness. Secrets arrive from Secret
+    Manager, `kubectl create secret`, shell pipelines, and copy-paste, and
+    several of those append a trailing newline. A credential ending in "\\r\\n"
+    cannot be placed in an HTTP header — httpx raises LocalProtocolError, which
+    surfaces as an opaque "Connection error" that looks like a network fault
+    and is miserable to trace back to a stray byte.
+    """
+    value = os.getenv(name)
+    if value is None:
+        return default
+    return value.strip()
 
 
 def _int(name: str, default: int) -> int:

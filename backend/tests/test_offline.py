@@ -131,6 +131,37 @@ def test_human_decision_is_not_clobbered() -> None:
     check("counsel action is detected", counsel.has_human_decision)
 
 
+def test_secrets_are_trimmed() -> None:
+    """A secret with a trailing newline must not reach an HTTP header."""
+    print("\nsecret hygiene")
+    from backend.app.config import Settings
+
+    original = os.environ.get("PARALLEL_API_KEY")
+    try:
+        # Exactly what Secret Manager returns when a value was piped in from
+        # PowerShell: the key plus CRLF.
+        os.environ["PARALLEL_API_KEY"] = "pk_test_abc123\r\n"
+        settings = Settings()
+        check(
+            "trailing CRLF stripped from the key",
+            settings.parallel_api_key == "pk_test_abc123",
+            repr(settings.parallel_api_key),
+        )
+        check(
+            "key is header-safe",
+            "\r" not in settings.parallel_api_key and "\n" not in settings.parallel_api_key,
+        )
+
+        os.environ["GOOGLE_CLOUD_PROJECT"] = "  my-project \n"
+        check("project id trimmed", Settings().google_cloud_project == "my-project")
+    finally:
+        if original is None:
+            os.environ.pop("PARALLEL_API_KEY", None)
+        else:
+            os.environ["PARALLEL_API_KEY"] = original
+        os.environ.pop("GOOGLE_CLOUD_PROJECT", None)
+
+
 def test_colors() -> None:
     print("\nstatus colours")
     check("detected is red", heat_color("detected") == "red")
@@ -270,6 +301,7 @@ async def test_store() -> None:
 def main() -> int:
     test_approval_invariant()
     test_human_decision_is_not_clobbered()
+    test_secrets_are_trimmed()
     test_colors()
     test_parsing()
     test_search_and_schema()
