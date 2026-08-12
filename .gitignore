@@ -1,0 +1,18 @@
+.venv/
+__pycache__/
+*.py[cod]
+.env
+.env.local
+node_modules/
+frontend/dist/
+backend/app/static/
+.DS_Store
+*.egg-info/
+.pytest_cache/
+uploads/
+.last_project
+.claude/
+
+# Generated demo assets are committed on purpose so judges can run the seeded
+# demo without regenerating them. Only the intermediate audio is ignored.
+backend/app/samples/_cue.wav

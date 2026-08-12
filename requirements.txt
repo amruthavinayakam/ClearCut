@@ -1,0 +1,26 @@
+# Agent framework + Gemini (text and multimodal video) on Vertex AI
+google-adk==2.6.3
+google-genai==2.17.0
+
+# Partner: Parallel Search, Task, and Monitor APIs
+parallel-web==1.2.0
+
+# Web layer
+fastapi==0.141.1
+uvicorn[standard]==0.52.1
+python-multipart==0.0.20
+pydantic==2.13.4
+python-dotenv==1.1.1
+httpx==0.28.1
+
+# Screenplay ingestion
+pypdf==6.15.0
+
+# Rough-cut handling: ffprobe for duration, and demo-asset generation
+imageio-ffmpeg==0.6.0
+pillow==12.3.0
+numpy==2.5.2
+
+# Optional Google Cloud services
+google-cloud-firestore==2.22.0
+google-cloud-storage==3.13.1
