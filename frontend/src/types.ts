@@ -112,8 +112,30 @@ export interface ProductionDocument {
   covers_territory: string;
   covers_term: string;
   covers_media: string;
+  original_filename: string;
+  mime_type: string;
+  size_bytes: number;
+  storage_key: string;
+  media: string[];
+  territories: string[];
+  starts_on: string | null;
+  ends_on: string | null;
+  perpetual: boolean;
+  covered_use: string;
   attached_at: string;
   attached_by: string;
+}
+
+export interface IntendedUseProfile {
+  media: string[];
+  territories: string[];
+  starts_on: string | null;
+  ends_on: string | null;
+}
+
+export interface ScopeAssessment {
+  outcome: "covers" | "partial" | "unknown" | "expired";
+  gaps: string[];
 }
 
 export interface ClearanceItem {
@@ -222,6 +244,7 @@ export interface Project {
   reconciliation: ReconciliationFinding[];
   audit_events: AuditEvent[];
   activity_events: ActivityEvent[];
+  use_profile: IntendedUseProfile;
   summary: ProjectSummary;
 }
 

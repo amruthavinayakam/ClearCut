@@ -2,8 +2,11 @@ import type {
   Actor,
   AppConfig,
   MonitorRecord,
+  IntendedUseProfile,
+  ProductionDocument,
   Project,
   ProjectListItem,
+  ScopeAssessment,
   WorkflowStatus,
 } from "../types";
 
@@ -22,6 +25,7 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
     error.status = response.status;
     throw error;
   }
+  if (response.status === 204) return undefined as T;
   return (await response.json()) as T;
 }
 
@@ -95,15 +99,87 @@ export const api = {
     actor: Actor,
     rationale: string,
     actorName = "",
+    documentIds: string[] = [],
   ) =>
     request<{ item_id: string; status: WorkflowStatus }>(
       `/api/projects/${projectId}/items/${itemId}/status`,
       {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ status, actor, rationale, actor_name: actorName }),
+        body: JSON.stringify({
+          status,
+          actor,
+          rationale,
+          actor_name: actorName,
+          document_ids: documentIds,
+        }),
       },
     ),
+
+  attachDocument: (
+    projectId: string,
+    itemId: string,
+    file: File,
+    metadata: {
+      kind: string;
+      title: string;
+      notes: string;
+      media: string;
+      territories: string;
+      starts_on: string;
+      ends_on: string;
+      perpetual: boolean;
+      covered_use: string;
+      attached_by: string;
+    },
+  ) => {
+    const form = new FormData();
+    form.append("file", file);
+    Object.entries(metadata).forEach(([key, value]) => form.append(key, String(value)));
+    return request<{ item_id: string; document: ProductionDocument; scope: ScopeAssessment }>(
+      `/api/projects/${projectId}/items/${itemId}/documents`,
+      { method: "POST", body: form },
+    );
+  },
+
+  updateDocument: (
+    projectId: string,
+    itemId: string,
+    documentId: string,
+    metadata: Partial<ProductionDocument>,
+  ) => request<{ item_id: string; document: ProductionDocument; scope: ScopeAssessment }>(
+    `/api/projects/${projectId}/items/${itemId}/documents/${documentId}`,
+    {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(metadata),
+    },
+  ),
+
+  deleteDocument: (projectId: string, itemId: string, documentId: string) =>
+    request<void>(`/api/projects/${projectId}/items/${itemId}/documents/${documentId}`, {
+      method: "DELETE",
+    }),
+
+  documentUrl: (projectId: string, itemId: string, documentId: string) =>
+    `/api/projects/${projectId}/items/${itemId}/documents/${documentId}`,
+
+  updateCoordination: (projectId: string, itemId: string, assignedTo: string) =>
+    request<{ item_id: string; assigned_to: string }>(
+      `/api/projects/${projectId}/items/${itemId}/coordination`,
+      {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ assigned_to: assignedTo }),
+      },
+    ),
+
+  updateUseProfile: (projectId: string, profile: IntendedUseProfile) =>
+    request<{ use_profile: IntendedUseProfile }>(`/api/projects/${projectId}/use-profile`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(profile),
+    }),
 
   draftRequest: (projectId: string, itemId: string) =>
     request<{ item_id: string; draft: string }>(

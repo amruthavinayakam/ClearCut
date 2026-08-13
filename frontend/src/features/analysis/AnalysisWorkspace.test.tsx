@@ -80,6 +80,7 @@ const PROJECT: Project = {
       detail: { count: 1 },
     },
   ],
+  use_profile: { media: [], territories: [], starts_on: null, ends_on: null },
   summary: {
     colors: { red: 1, amber: 0, blue: 0, green: 0, gray: 0 },
     by_category: { brand: 1 },

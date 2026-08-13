@@ -14,6 +14,8 @@ from typing import Any, Literal, Optional
 
 from pydantic import BaseModel, Field
 
+from .scope import IntendedUseProfile
+
 # --------------------------------------------------------------------------
 # Vocabulary
 # --------------------------------------------------------------------------
@@ -243,6 +245,16 @@ class ProductionDocument(BaseModel):
     covers_territory: str = ""
     covers_term: str = ""
     covers_media: str = ""
+    original_filename: str = ""
+    mime_type: str = "application/octet-stream"
+    size_bytes: int = 0
+    storage_key: str = ""
+    media: list[str] = Field(default_factory=list)
+    territories: list[str] = Field(default_factory=list)
+    starts_on: Optional[str] = None
+    ends_on: Optional[str] = None
+    perpetual: bool = False
+    covered_use: str = ""
     attached_at: str = Field(default_factory=_now)
     attached_by: str = ""
 
@@ -464,6 +476,7 @@ class Project(BaseModel):
     reconciliation: list[ReconciliationFinding] = Field(default_factory=list)
     audit_events: list[AuditEvent] = Field(default_factory=list)
     activity_events: list[ActivityEvent] = Field(default_factory=list)
+    use_profile: IntendedUseProfile = Field(default_factory=IntendedUseProfile)
 
     def item(self, item_id: str) -> Optional[ClearanceItem]:
         return next((i for i in self.items if i.id == item_id), None)

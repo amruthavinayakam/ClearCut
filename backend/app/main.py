@@ -10,7 +10,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Optional
 
-from fastapi import Body, FastAPI, File, Form, HTTPException, Request, UploadFile
+from fastapi import FastAPI, File, Form, HTTPException, Request, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse, PlainTextResponse, Response, StreamingResponse
 from fastapi.staticfiles import StaticFiles
@@ -18,9 +18,11 @@ from pydantic import BaseModel, Field
 
 from .assets import StoredAsset, get_asset_store
 from .config import get_settings
+from .documents import DocumentMetadataPatch, comma_list, find_document, scope_for
 from .export import to_markdown
 from .models import Actor, ApprovalDenied, Project, ProductionDocument, WorkflowStatus
 from .pipeline import research_item, start_project
+from .scope import IntendedUseProfile
 from .screenplay import (
     NoTextLayerError,
     ScreenplayParseError,
@@ -535,6 +537,7 @@ class StatusChange(BaseModel):
     actor: Actor = "coordinator"
     actor_name: str = ""
     rationale: str = Field(min_length=1, max_length=1000)
+    document_ids: list[str] = Field(default_factory=list)
 
 
 @app.post("/api/projects/{project_id}/items/{item_id}/status")
@@ -550,12 +553,25 @@ async def set_item_status(
     item = project.item(item_id)
     if item is None:
         raise HTTPException(status_code=404, detail="Item not found.")
+    if body.status == "documented_permission":
+        owned_document_ids = {document.id for document in item.documents}
+        if not body.document_ids:
+            raise HTTPException(
+                status_code=422,
+                detail="Select at least one attached document before recording permission.",
+            )
+        if any(document_id not in owned_document_ids for document_id in body.document_ids):
+            raise HTTPException(
+                status_code=422,
+                detail="Every selected document must belong to this clearance item.",
+            )
     try:
         event = item.transition(
             body.status,
             actor=body.actor,
             actor_name=body.actor_name,
             rationale=body.rationale,
+            detail={"document_ids": body.document_ids} if body.document_ids else {},
         )
     except ApprovalDenied as exc:
         # 403 rather than 400: this is an authorisation boundary, and the demo
@@ -601,13 +617,48 @@ async def retry_item_research(project_id: str, item_id: str) -> dict[str, Any]:
 
 @app.post("/api/projects/{project_id}/items/{item_id}/documents")
 async def attach_document(
-    project_id: str, item_id: str, document: ProductionDocument = Body(...)
+    project_id: str,
+    item_id: str,
+    file: UploadFile = File(...),
+    kind: str = Form(default="license"),
+    title: str = Form(default=""),
+    notes: str = Form(default=""),
+    media: str = Form(default=""),
+    territories: str = Form(default=""),
+    starts_on: Optional[str] = Form(default=None),
+    ends_on: Optional[str] = Form(default=None),
+    perpetual: bool = Form(default=False),
+    covered_use: str = Form(default=""),
+    attached_by: str = Form(default=""),
 ) -> dict[str, Any]:
     project = await _require(project_id)
     item = project.item(item_id)
     if item is None:
         raise HTTPException(status_code=404, detail="Item not found.")
-
+    if kind not in {"release", "license", "permit", "correspondence", "other"}:
+        raise HTTPException(status_code=422, detail="Unsupported document type.")
+    data = await _read_upload(file, "Document")
+    asset = await asset_store.put_bytes(
+        data,
+        file.filename or "document",
+        file.content_type or "application/octet-stream",
+    )
+    document = ProductionDocument(
+        kind=kind,
+        title=title.strip() or file.filename or "Untitled document",
+        notes=notes.strip(),
+        original_filename=asset.original_name,
+        mime_type=asset.mime_type,
+        size_bytes=asset.size_bytes,
+        storage_key=asset.key,
+        media=comma_list(media),
+        territories=comma_list(territories),
+        starts_on=starts_on or None,
+        ends_on=ends_on or None,
+        perpetual=perpetual,
+        covered_use=covered_use.strip(),
+        attached_by=attached_by.strip(),
+    )
     item.documents.append(document)
     item.log(
         "document_attached",
@@ -617,7 +668,138 @@ async def attach_document(
         detail={"document_id": document.id},
     )
     await store.put(project)
-    return {"item_id": item_id, "documents": [d.model_dump() for d in item.documents]}
+    return {
+        "item_id": item_id,
+        "document": document.model_dump(mode="json"),
+        "scope": scope_for(document, project.use_profile).model_dump(mode="json"),
+    }
+
+
+def _require_document(item, document_id: str) -> ProductionDocument:
+    document = find_document(item, document_id)
+    if document is None:
+        raise HTTPException(status_code=404, detail="Document not found for this item.")
+    return document
+
+
+@app.get("/api/projects/{project_id}/items/{item_id}/documents/{document_id}")
+async def download_document(project_id: str, item_id: str, document_id: str) -> Response:
+    project = await _require(project_id)
+    item = project.item(item_id)
+    if item is None:
+        raise HTTPException(status_code=404, detail="Item not found.")
+    document = _require_document(item, document_id)
+    if not document.storage_key:
+        raise HTTPException(status_code=404, detail="Document asset is missing.")
+    try:
+        data = await asset_store.read_bytes(document.storage_key)
+    except FileNotFoundError:
+        raise HTTPException(status_code=404, detail="Document asset is missing.") from None
+    filename = document.original_filename.replace('"', "") or "document"
+    return Response(
+        content=data,
+        media_type=document.mime_type,
+        headers={"Content-Disposition": f'attachment; filename="{filename}"'},
+    )
+
+
+@app.patch("/api/projects/{project_id}/items/{item_id}/documents/{document_id}")
+async def update_document(
+    project_id: str,
+    item_id: str,
+    document_id: str,
+    body: DocumentMetadataPatch,
+) -> dict[str, Any]:
+    project = await _require(project_id)
+    item = project.item(item_id)
+    if item is None:
+        raise HTTPException(status_code=404, detail="Item not found.")
+    document = _require_document(item, document_id)
+    changes = body.model_dump(exclude_unset=True)
+    if "kind" in changes and changes["kind"] not in {
+        "release", "license", "permit", "correspondence", "other"
+    }:
+        raise HTTPException(status_code=422, detail="Unsupported document type.")
+    for field, value in changes.items():
+        setattr(document, field, value)
+    item.log(
+        "document_metadata_updated",
+        actor="coordinator",
+        rationale=f"Updated recorded scope for {document.title}.",
+        detail={"document_id": document.id, "fields": sorted(changes)},
+    )
+    await store.put(project)
+    return {
+        "item_id": item_id,
+        "document": document.model_dump(mode="json"),
+        "scope": scope_for(document, project.use_profile).model_dump(mode="json"),
+    }
+
+
+@app.delete("/api/projects/{project_id}/items/{item_id}/documents/{document_id}")
+async def delete_document(project_id: str, item_id: str, document_id: str) -> Response:
+    project = await _require(project_id)
+    item = project.item(item_id)
+    if item is None:
+        raise HTTPException(status_code=404, detail="Item not found.")
+    document = _require_document(item, document_id)
+    if document.storage_key:
+        await asset_store.delete(document.storage_key)
+    item.documents = [candidate for candidate in item.documents if candidate.id != document_id]
+    item.log(
+        "document_removed",
+        actor="coordinator",
+        rationale=f"Removed {document.title} from the recorded evidence.",
+        detail={"document_id": document.id},
+    )
+    await store.put(project)
+    return Response(status_code=204)
+
+
+class CoordinationChange(BaseModel):
+    assigned_to: str = Field(max_length=80)
+
+
+@app.patch("/api/projects/{project_id}/items/{item_id}/coordination")
+async def update_coordination(
+    project_id: str, item_id: str, body: CoordinationChange
+) -> dict[str, Any]:
+    project = await _require(project_id)
+    item = project.item(item_id)
+    if item is None:
+        raise HTTPException(status_code=404, detail="Item not found.")
+    item.assigned_to = body.assigned_to.strip()
+    item.log(
+        "assignment_changed",
+        actor="coordinator",
+        actor_name=item.assigned_to,
+        rationale=f"Assigned to {item.assigned_to}." if item.assigned_to else "Assignment cleared.",
+    )
+    await store.put(project)
+    return {"item_id": item.id, "assigned_to": item.assigned_to}
+
+
+@app.patch("/api/projects/{project_id}/use-profile")
+async def update_use_profile(project_id: str, body: IntendedUseProfile) -> dict[str, Any]:
+    project = await _require(project_id)
+    project.use_profile = body
+    project.log(
+        "intended_use_updated",
+        actor="coordinator",
+        rationale="Updated the production's intended-use comparison profile.",
+        detail=body.model_dump(mode="json"),
+    )
+    await store.put(project)
+    return {
+        "use_profile": body.model_dump(mode="json"),
+        "assessments": {
+            item.id: {
+                document.id: scope_for(document, body).model_dump(mode="json")
+                for document in item.documents
+            }
+            for item in project.items
+        },
+    }
 
 
 class DraftRequest(BaseModel):

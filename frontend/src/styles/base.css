@@ -743,6 +743,305 @@ a {
   font-size: 0.61rem;
 }
 
+.case-coordination {
+  padding: 1rem 0;
+  border-top: 1px solid var(--line);
+}
+
+.coordination-head,
+.assignment-form,
+.document-list article > header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+}
+
+.coordination-head .eyebrow {
+  margin: 0;
+}
+
+.assignment-form {
+  margin: 0.9rem 0;
+}
+
+.assignment-form label {
+  min-width: 0;
+  flex: 1;
+  color: var(--muted);
+  font-size: 0.6rem;
+}
+
+.assignment-form input {
+  width: 100%;
+  display: block;
+  padding: 0.4rem 0;
+  border: 0;
+  border-bottom: 1px solid var(--line);
+  background: transparent;
+  color: var(--bone);
+  font-size: 0.72rem;
+}
+
+.disposition-actions {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  border-top: 1px solid var(--line);
+}
+
+.disposition-actions button {
+  min-height: 37px;
+  padding: 0.5rem 0;
+  border: 0;
+  border-bottom: 1px solid var(--line);
+  background: transparent;
+  color: var(--muted);
+  cursor: pointer;
+  font-size: 0.63rem;
+  text-align: left;
+}
+
+.disposition-actions button:nth-child(odd) {
+  border-right: 1px solid var(--line);
+  padding-right: 0.55rem;
+}
+
+.disposition-actions button:nth-child(even) {
+  padding-left: 0.55rem;
+}
+
+.disposition-actions button:hover,
+.disposition-actions button:focus-visible {
+  color: var(--bone);
+}
+
+.sheet-intro {
+  max-width: 46ch;
+  margin: 0 0 1.4rem;
+  color: var(--muted);
+  font-size: 0.72rem;
+}
+
+.document-form,
+.disposition-form {
+  display: grid;
+  gap: 0.9rem;
+}
+
+.document-form {
+  padding-bottom: 1.5rem;
+  border-bottom: 1px solid var(--line);
+}
+
+.document-form label,
+.disposition-form > label,
+.disposition-form fieldset {
+  min-width: 0;
+  margin: 0;
+  color: var(--muted);
+  font-size: 0.63rem;
+}
+
+.document-form input:not([type="checkbox"]),
+.document-form select,
+.document-form textarea,
+.disposition-form input:not([type="checkbox"]),
+.disposition-form textarea {
+  width: 100%;
+  display: block;
+  margin-top: 0.3rem;
+  padding: 0.55rem 0;
+  border: 0;
+  border-bottom: 1px solid var(--line);
+  border-radius: 0;
+  background: transparent;
+  color: var(--bone);
+  font-size: 0.74rem;
+}
+
+.document-form input[type="file"]::file-selector-button {
+  margin-right: 0.7rem;
+  padding: 0.35rem 0.55rem;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: var(--bone);
+}
+
+.document-form textarea,
+.disposition-form textarea {
+  resize: vertical;
+}
+
+.form-pair {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 1rem;
+}
+
+.check-line {
+  display: flex;
+  align-items: center;
+  gap: 0.55rem;
+  color: var(--bone) !important;
+  font-size: 0.7rem !important;
+}
+
+.check-line input {
+  accent-color: var(--amber);
+}
+
+.form-error {
+  margin: 0;
+  color: var(--risk);
+  font-size: 0.68rem;
+}
+
+.document-list {
+  padding-top: 1.5rem;
+}
+
+.document-list > p:not(.eyebrow) {
+  color: var(--muted);
+  font-size: 0.7rem;
+}
+
+.document-list article {
+  padding: 1rem 0;
+  border-top: 1px solid var(--line);
+}
+
+.document-list article > header strong,
+.document-list article > header span {
+  display: block;
+}
+
+.document-list article > header strong {
+  font-size: 0.75rem;
+}
+
+.document-list article > header span {
+  margin-top: 0.25rem;
+  color: var(--muted);
+  font-family: var(--font-mono);
+  font-size: 0.56rem;
+}
+
+.document-actions {
+  display: flex;
+  gap: 0.7rem;
+}
+
+.document-actions a,
+.document-actions button {
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: var(--muted);
+  cursor: pointer;
+  font-size: 0.62rem;
+}
+
+.scope-assessment {
+  margin-top: 0.8rem;
+  padding-left: 0.75rem;
+  border-left: 1px solid var(--line);
+}
+
+.scope-assessment--covers { border-color: var(--documented); }
+.scope-assessment--partial,
+.scope-assessment--expired { border-color: var(--risk); }
+.scope-assessment--unknown { border-color: var(--amber); }
+
+.scope-assessment strong,
+.scope-assessment small {
+  display: block;
+}
+
+.scope-assessment strong {
+  font-size: 0.68rem;
+}
+
+.scope-assessment ul {
+  margin: 0.45rem 0;
+  padding-left: 1rem;
+  color: var(--muted);
+  font-size: 0.64rem;
+}
+
+.scope-assessment small {
+  margin-top: 0.35rem;
+  color: var(--dismissed);
+  font-size: 0.58rem;
+}
+
+.dialog-layer {
+  position: fixed;
+  z-index: 130;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  padding: 1rem;
+  background: rgba(11, 9, 10, 0.82);
+}
+
+.dialog {
+  width: min(100%, 510px);
+  padding: 1.25rem;
+  border: 1px solid var(--line);
+  background: var(--surface);
+}
+
+.dialog > header {
+  padding-bottom: 1rem;
+  border-bottom: 1px solid var(--line);
+}
+
+.dialog > header h2 {
+  margin: 0;
+  font-family: var(--font-signal);
+  font-size: 1.7rem;
+  font-weight: 430;
+  line-height: 1.05;
+}
+
+.dialog > header > p:last-child:not(.eyebrow) {
+  margin: 0.65rem 0 0;
+  color: var(--muted);
+  font-size: 0.7rem;
+}
+
+.dialog form,
+.dialog > .dialog-actions {
+  padding-top: 1rem;
+}
+
+.disposition-form fieldset {
+  display: grid;
+  gap: 0.5rem;
+  padding: 0 0 0.9rem;
+  border: 0;
+  border-bottom: 1px solid var(--line);
+}
+
+.disposition-form legend {
+  margin-bottom: 0.6rem;
+  color: var(--bone);
+  font-size: 0.68rem;
+}
+
+.disposition-form fieldset p {
+  margin: 0;
+  color: var(--risk);
+  font-size: 0.67rem;
+}
+
+.dialog-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 0.6rem;
+}
+
 .drawer-layer {
   position: fixed;
   z-index: 100;
@@ -866,6 +1165,14 @@ a {
     animation: drawer-in 220ms var(--ease-out) both;
   }
 
+  .dialog-layer {
+    animation: drawer-layer-in 160ms var(--ease-out) both;
+  }
+
+  .dialog {
+    animation: dialog-in 190ms var(--ease-out) both;
+  }
+
   @keyframes evidence-enter {
     from { opacity: 0; transform: translateY(5px); }
     to { opacity: 1; transform: translateY(0); }
@@ -879,6 +1186,12 @@ a {
   @keyframes drawer-in {
     from { opacity: 0; transform: translateX(18px); }
     to { opacity: 1; transform: translateX(0); }
+  }
+
+
+  @keyframes dialog-in {
+    from { opacity: 0; transform: translateY(8px) scale(0.99); }
+    to { opacity: 1; transform: translateY(0) scale(1); }
   }
 }
 
@@ -934,6 +1247,18 @@ a {
 
   .evidence-inspector {
     grid-column: auto;
+  }
+
+  .form-pair,
+  .disposition-actions {
+    grid-template-columns: 1fr;
+  }
+
+  .disposition-actions button:nth-child(odd),
+  .disposition-actions button:nth-child(even) {
+    padding-right: 0;
+    padding-left: 0;
+    border-right: 0;
   }
 }
 

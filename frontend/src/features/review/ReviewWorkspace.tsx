@@ -7,6 +7,7 @@ import type { ClearanceItem, MonitorRecord, Project } from "../../types";
 import CaseRail, { rankCases, type CaseQuery } from "./CaseRail";
 import EvidenceInspector from "./EvidenceInspector";
 import PictureWorkspace from "./PictureWorkspace";
+import UseProfileSheet from "./UseProfileSheet";
 
 
 interface Props {
@@ -27,8 +28,10 @@ export default function ReviewWorkspace({ initialProject, monitors, onRefresh }:
   const [seekTime, setSeekTime] = useState<number | null>(null);
   const [query, setQuery] = useState<CaseQuery>({ filter: "all", search: "" });
   const [drawer, setDrawer] = useState<"activity" | "copilot" | null>(null);
+  const [useProfileOpen, setUseProfileOpen] = useState(false);
   const activityTrigger = useRef<HTMLButtonElement>(null);
   const copilotTrigger = useRef<HTMLButtonElement>(null);
+  const useProfileTrigger = useRef<HTMLButtonElement>(null);
 
   useEffect(() => {
     if (selectedId && project.items.some((item) => item.id === selectedId)) return;
@@ -74,6 +77,9 @@ export default function ReviewWorkspace({ initialProject, monitors, onRefresh }:
           <button ref={activityTrigger} type="button" onClick={() => setDrawer("activity")}>
             Activity · {project.activity_events.length}
           </button>
+          <button ref={useProfileTrigger} type="button" onClick={() => setUseProfileOpen(true)}>
+            Intended use
+          </button>
           <button ref={copilotTrigger} type="button" onClick={() => setDrawer("copilot")}>
             Copilot
           </button>
@@ -95,7 +101,13 @@ export default function ReviewWorkspace({ initialProject, monitors, onRefresh }:
           onSelect={select}
         />
         {selected ? (
-          <EvidenceInspector key={selected.id} item={selected} />
+          <EvidenceInspector
+            key={selected.id}
+            projectId={project.id}
+            item={selected}
+            useProfile={project.use_profile}
+            onChanged={onRefresh}
+          />
         ) : (
           <aside className="evidence-inspector evidence-inspector--empty">Select a case to inspect its evidence.</aside>
         )}
@@ -126,6 +138,14 @@ export default function ReviewWorkspace({ initialProject, monitors, onRefresh }:
         <p className="drawer-note">{monitors.length} standing monitors · evidence may change.</p>
         <button className="text-action" type="button" onClick={onRefresh}>Refresh project</button>
       </Drawer>
+      <UseProfileSheet
+        open={useProfileOpen}
+        projectId={project.id}
+        profile={project.use_profile}
+        onClose={() => setUseProfileOpen(false)}
+        onChanged={onRefresh}
+        returnFocusRef={useProfileTrigger}
+      />
     </main>
   );
 }
