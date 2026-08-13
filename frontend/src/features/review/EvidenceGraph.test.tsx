@@ -9,6 +9,7 @@ import ReviewWorkspace from "./ReviewWorkspace";
 
 const ITEM = {
   id: "item_art",
+  stable_item_id: "stable_art",
   name: "Harbor Lights, 1961",
   category: "artwork",
   description: "A signed painting appears behind the lead.",
@@ -73,6 +74,7 @@ const PROJECT = {
   audit_events: [],
   activity_events: [],
   use_profile: { media: [], territories: [], starts_on: null, ends_on: null },
+  active_revision_id: null,
   summary: {
     colors: { red: 0, amber: 1, blue: 0, green: 0, gray: 0 },
     by_category: { artwork: 1 },

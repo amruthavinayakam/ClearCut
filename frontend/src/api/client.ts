@@ -5,6 +5,8 @@ import type {
   IntendedUseProfile,
   ProductionDocument,
   Project,
+  ProjectRevision,
+  ProjectRevisionSummary,
   ProjectListItem,
   ScopeAssessment,
   WorkflowStatus,
@@ -78,6 +80,34 @@ export const api = {
 
   runSample: () => request<Project>("/api/projects/sample", { method: "POST" }),
   getProject: (id: string) => request<Project>(`/api/projects/${id}`),
+
+  listRevisions: (projectId: string) =>
+    request<{ active_revision_id: string | null; revisions: ProjectRevisionSummary[] }>(
+      `/api/projects/${projectId}/revisions`,
+    ),
+
+  getRevision: (projectId: string, revisionId: string) =>
+    request<ProjectRevision>(`/api/projects/${projectId}/revisions/${revisionId}`),
+
+  createRevision: (projectId: string, script: File | null, cut: File | null) => {
+    const form = new FormData();
+    if (script) form.append("script", script);
+    if (cut) form.append("cut", cut);
+    return request<ProjectRevision>(`/api/projects/${projectId}/revisions`, {
+      method: "POST",
+      body: form,
+    });
+  },
+
+  applyRevision: (projectId: string, revisionId: string, predecessorId: string | null) =>
+    request<{ revision: ProjectRevision; project: Project; already_applied: boolean }>(
+      `/api/projects/${projectId}/revisions/${revisionId}/apply`,
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ predecessor_id: predecessorId }),
+      },
+    ),
 
   setArchived: (projectId: string, archived: boolean) =>
     request<Project>(`/api/projects/${projectId}`, {

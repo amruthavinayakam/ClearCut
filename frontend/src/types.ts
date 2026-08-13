@@ -140,6 +140,7 @@ export interface ScopeAssessment {
 
 export interface ClearanceItem {
   id: string;
+  stable_item_id: string;
   name: string;
   category: string;
   description: string;
@@ -176,6 +177,43 @@ export interface ReconciliationFinding {
   item_id: string;
   item_name: string;
   explanation: string;
+}
+
+export type RevisionChangeKind =
+  | "unchanged"
+  | "added"
+  | "removed"
+  | "materially_changed"
+  | "decision_stale";
+
+export interface RevisionChange {
+  kind: RevisionChangeKind;
+  stable_item_id: string;
+  item_name: string;
+  before_item_id: string | null;
+  after_item_id: string | null;
+  explanation: string;
+  match_basis: string;
+  previous_status: WorkflowStatus | null;
+}
+
+export interface ProjectRevision {
+  id: string;
+  sequence: number;
+  script: Project["script"];
+  cut: Project["cut"];
+  state: "processing" | "ready" | "failed" | "applied";
+  items: ClearanceItem[];
+  changes: RevisionChange[];
+  predecessor_id: string | null;
+  created_at: string;
+  applied_at: string | null;
+  error: string | null;
+}
+
+export interface ProjectRevisionSummary extends Omit<ProjectRevision, "items"> {
+  item_count: number;
+  change_counts: Record<RevisionChangeKind, number>;
 }
 
 export interface ProjectSummary {
@@ -245,6 +283,7 @@ export interface Project {
   audit_events: AuditEvent[];
   activity_events: ActivityEvent[];
   use_profile: IntendedUseProfile;
+  active_revision_id: string | null;
   summary: ProjectSummary;
 }
 

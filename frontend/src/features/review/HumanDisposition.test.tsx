@@ -17,6 +17,7 @@ vi.mock("../../api/client", () => ({
 
 const ITEM = {
   id: "item_art",
+  stable_item_id: "stable_art",
   name: "Harbor Lights",
   category: "artwork",
   description: "Painting visible in frame.",

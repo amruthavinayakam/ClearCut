@@ -1042,6 +1042,258 @@ a {
   gap: 0.6rem;
 }
 
+.revision-intake,
+.revision-compare,
+.revision-state {
+  width: min(100% - 40px, 1180px);
+  margin: 0 auto;
+  padding: clamp(2.5rem, 7vw, 6.5rem) 0 5rem;
+}
+
+.revision-head {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 2rem;
+  padding-bottom: 1.5rem;
+  border-bottom: 1px solid var(--line);
+}
+
+.revision-head h1,
+.revision-state h1 {
+  max-width: 850px;
+  margin: 0;
+  font-family: var(--font-signal);
+  font-size: clamp(2.6rem, 6vw, 5.8rem);
+  font-weight: 430;
+  letter-spacing: -0.045em;
+  line-height: 0.94;
+}
+
+.revision-head > div > p:last-child,
+.revision-state > p:not(.eyebrow) {
+  color: var(--muted);
+  font-size: 0.74rem;
+}
+
+.revision-head > a {
+  color: var(--muted);
+  font-size: 0.7rem;
+  text-decoration: none;
+  white-space: nowrap;
+}
+
+.revision-baseline {
+  display: grid;
+  grid-template-columns: 140px 1fr 1fr 2fr;
+  gap: 1rem;
+  align-items: center;
+  padding: 1.2rem 0;
+  border-bottom: 1px solid var(--line);
+}
+
+.revision-baseline .eyebrow {
+  margin: 0;
+}
+
+.revision-baseline div span,
+.revision-baseline div strong {
+  display: block;
+}
+
+.revision-baseline div span,
+.revision-baseline small {
+  color: var(--muted);
+  font-size: 0.62rem;
+}
+
+.revision-baseline div strong {
+  margin-top: 0.15rem;
+  font-size: 0.76rem;
+}
+
+.revision-processing,
+.revision-failed {
+  min-height: 330px;
+  display: flex;
+  align-items: center;
+  gap: 1.2rem;
+  padding: 3rem 0;
+  border-bottom: 1px solid var(--line);
+}
+
+.revision-processing h2,
+.revision-failed h2 {
+  max-width: 620px;
+  margin: 0;
+  font-family: var(--font-signal);
+  font-size: clamp(2rem, 4vw, 3.6rem);
+  font-weight: 430;
+  line-height: 1;
+}
+
+.revision-processing p:last-child,
+.revision-failed p {
+  color: var(--muted);
+  font-size: 0.72rem;
+}
+
+.version-ripple {
+  padding: clamp(2rem, 5vw, 4rem) 0 0;
+}
+
+.version-ripple > header {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 2rem;
+}
+
+.version-ripple h2 {
+  margin: 0;
+  font-family: var(--font-signal);
+  font-size: clamp(2rem, 4vw, 3.8rem);
+  font-weight: 430;
+  letter-spacing: -0.035em;
+  line-height: 1;
+}
+
+.version-ripple > header > span {
+  color: var(--muted);
+  font-family: var(--font-mono);
+  font-size: 0.62rem;
+}
+
+.ripple-tracks {
+  margin-top: 2.2rem;
+  padding: 1.2rem 0;
+  border-top: 1px solid var(--line);
+  border-bottom: 1px solid var(--line);
+}
+
+.ripple-track {
+  display: grid;
+  grid-template-columns: 120px 1fr;
+  align-items: center;
+  min-height: 45px;
+}
+
+.ripple-track > span {
+  color: var(--muted);
+  font-family: var(--font-mono);
+  font-size: 0.58rem;
+}
+
+.ripple-track > div {
+  position: relative;
+  height: 1px;
+  background: var(--line);
+}
+
+.ripple-track--candidate > div {
+  background: color-mix(in srgb, var(--amber) 26%, var(--line));
+}
+
+.ripple-signal {
+  position: absolute;
+  top: 50%;
+  width: 9px;
+  height: 9px;
+  padding: 0;
+  border: 1px solid currentColor;
+  border-radius: 50%;
+  background: var(--canvas);
+  color: var(--amber);
+  cursor: pointer;
+  transform: translate(-50%, -50%);
+}
+
+.ripple-signal--unchanged { color: var(--dismissed); opacity: 0.44; }
+.ripple-signal--added { color: var(--amber); background: var(--amber); }
+.ripple-signal--removed { color: var(--dismissed); }
+.ripple-signal--materially_changed,
+.ripple-signal--decision_stale { color: var(--risk); background: var(--risk); }
+
+.ripple-scale {
+  display: flex;
+  justify-content: space-between;
+  padding: 0.35rem 0 0 120px;
+  color: var(--dismissed);
+  font-family: var(--font-mono);
+  font-size: 0.55rem;
+}
+
+.ripple-changes {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.ripple-changes li {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(180px, 0.55fr);
+  gap: 2rem;
+  padding: 1rem 0;
+  border-bottom: 1px solid var(--line);
+}
+
+.ripple-changes li > div:last-child {
+  text-align: right;
+}
+
+.ripple-changes strong,
+.ripple-changes span,
+.ripple-changes small {
+  display: block;
+}
+
+.ripple-changes strong {
+  font-size: 0.75rem;
+}
+
+.ripple-changes span,
+.ripple-changes small {
+  margin-top: 0.3rem;
+  color: var(--muted);
+  font-size: 0.64rem;
+}
+
+.ripple-changes li[data-change="unchanged"] {
+  opacity: 0.45;
+}
+
+.ripple-changes li[data-change="added"] strong { color: var(--amber); }
+.ripple-changes li[data-change="materially_changed"] strong,
+.ripple-changes li[data-change="decision_stale"] strong { color: var(--risk); }
+
+.revision-apply {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 2rem;
+  padding: 2rem 0;
+}
+
+.revision-apply .eyebrow {
+  margin-bottom: 0.4rem;
+}
+
+.revision-apply strong,
+.revision-apply span {
+  display: block;
+}
+
+.revision-apply strong {
+  font-size: 0.85rem;
+}
+
+.revision-apply span {
+  max-width: 650px;
+  margin-top: 0.4rem;
+  color: var(--muted);
+  font-size: 0.68rem;
+}
+
 .drawer-layer {
   position: fixed;
   z-index: 100;
@@ -1173,6 +1425,15 @@ a {
     animation: dialog-in 190ms var(--ease-out) both;
   }
 
+  .version-ripple[data-settled="false"] .ripple-signal {
+    opacity: 0;
+    transform: translate(-50%, -50%) scale(0.3);
+  }
+
+  .version-ripple[data-settled="true"] .ripple-signal {
+    transition: opacity 180ms var(--ease-out), transform 300ms var(--ease-out);
+  }
+
   @keyframes evidence-enter {
     from { opacity: 0; transform: translateY(5px); }
     to { opacity: 1; transform: translateY(0); }
@@ -1259,6 +1520,38 @@ a {
     padding-right: 0;
     padding-left: 0;
     border-right: 0;
+  }
+
+  .revision-head,
+  .revision-apply {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+
+  .revision-baseline {
+    grid-template-columns: 1fr 1fr;
+  }
+
+  .revision-baseline .eyebrow,
+  .revision-baseline small {
+    grid-column: 1 / -1;
+  }
+
+  .ripple-track {
+    grid-template-columns: 85px 1fr;
+  }
+
+  .ripple-scale {
+    padding-left: 85px;
+  }
+
+  .ripple-changes li {
+    grid-template-columns: 1fr;
+    gap: 0.4rem;
+  }
+
+  .ripple-changes li > div:last-child {
+    text-align: left;
   }
 }
 

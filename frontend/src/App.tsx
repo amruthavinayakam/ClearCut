@@ -8,6 +8,8 @@ import AnalysisWorkspace from "./features/analysis/AnalysisWorkspace";
 import NewProject from "./features/projects/NewProject";
 import ProjectLibrary from "./features/projects/ProjectLibrary";
 import ReviewWorkspace from "./features/review/ReviewWorkspace";
+import NewRevision from "./features/revisions/NewRevision";
+import RevisionCompare from "./features/revisions/RevisionCompare";
 import type { MonitorRecord, Project } from "./types";
 
 
@@ -89,6 +91,17 @@ function ProjectRoute({ projectId }: { projectId: string }) {
       }}
     />
   );
+}
+
+function NewRevisionRoute({ projectId }: { projectId: string }) {
+  const [project, setProject] = useState<Project | null>(null);
+  const [error, setError] = useState("");
+  useEffect(() => {
+    void api.getProject(projectId).then(setProject).catch((reason) => setError((reason as Error).message));
+  }, [projectId]);
+  if (error) return <section className="route-state"><p className="eyebrow">Project unavailable</p><h1>A revision cannot start.</h1><p>{error}</p><RouteLink href="/">Back to projects</RouteLink></section>;
+  if (!project) return <section className="route-state" aria-busy="true"><p className="eyebrow">Opening revision intake</p><h1>Reading the active production state.</h1></section>;
+  return <NewRevision project={project} onCreated={(revision) => navigate(`/projects/${project.id}/revisions/${revision.id}`)} />;
 }
 
 export default function App() {
@@ -193,7 +206,11 @@ export default function App() {
       content = <ProjectRoute projectId={route.projectId} />;
       break;
     case "new-revision":
+      content = <NewRevisionRoute projectId={route.projectId} />;
+      break;
     case "revision":
+      content = <RevisionCompare projectId={route.projectId} revisionId={route.revisionId} />;
+      break;
     case "packet":
       content = (
         <section className="route-state">

@@ -29,6 +29,7 @@ const PROJECT: Project = {
   items: [
     {
       id: "item_logo",
+      stable_item_id: "stable_logo",
       name: "Northstar Cola",
       category: "brand",
       description: "A can appears in frame.",
@@ -81,6 +82,7 @@ const PROJECT: Project = {
     },
   ],
   use_profile: { media: [], territories: [], starts_on: null, ends_on: null },
+  active_revision_id: null,
   summary: {
     colors: { red: 1, amber: 0, blue: 0, green: 0, gray: 0 },
     by_category: { brand: 1 },
