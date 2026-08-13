@@ -14,11 +14,11 @@ from fastapi import Body, FastAPI, File, Form, HTTPException, Request, UploadFil
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse, PlainTextResponse, Response, StreamingResponse
 from fastapi.staticfiles import StaticFiles
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 from .config import get_settings
 from .export import to_markdown
-from .models import ApprovalDenied, Project, ProductionDocument
+from .models import Actor, ApprovalDenied, Project, ProductionDocument, WorkflowStatus
 from .pipeline import start_project
 from .screenplay import ScreenplayParseError
 from .store import store
@@ -339,10 +339,10 @@ async def stream_project(project_id: str, request: Request) -> StreamingResponse
 
 
 class StatusChange(BaseModel):
-    status: str
-    actor: str = "coordinator"
+    status: WorkflowStatus
+    actor: Actor = "coordinator"
     actor_name: str = ""
-    rationale: str = ""
+    rationale: str = Field(min_length=1, max_length=1000)
 
 
 @app.post("/api/projects/{project_id}/items/{item_id}/status")
@@ -358,13 +358,10 @@ async def set_item_status(
     item = project.item(item_id)
     if item is None:
         raise HTTPException(status_code=404, detail="Item not found.")
-    if body.actor not in {"agent", "coordinator", "counsel", "system"}:
-        raise HTTPException(status_code=400, detail="Unknown actor.")
-
     try:
         event = item.transition(
-            body.status,  # type: ignore[arg-type]
-            actor=body.actor,  # type: ignore[arg-type]
+            body.status,
+            actor=body.actor,
             actor_name=body.actor_name,
             rationale=body.rationale,
         )

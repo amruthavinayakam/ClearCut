@@ -1,10 +1,16 @@
 import react from "@vitejs/plugin-react";
-import { defineConfig } from "vite";
+import { defineConfig } from "vitest/config";
 
 // The production build lands inside the backend package so a single Cloud Run
 // container serves both the API and the UI.
 export default defineConfig({
   plugins: [react()],
+  test: {
+    environment: "jsdom",
+    setupFiles: ["./src/test/setup.ts"],
+    css: true,
+    clearMocks: true,
+  },
   build: {
     outDir: "../backend/app/static",
     emptyOutDir: true,
