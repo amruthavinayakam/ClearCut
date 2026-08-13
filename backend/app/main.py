@@ -5,8 +5,6 @@ from __future__ import annotations
 import asyncio
 import json
 import logging
-import shutil
-import tempfile
 from pathlib import Path
 from typing import Any, Optional
 
@@ -16,6 +14,7 @@ from fastapi.responses import FileResponse, PlainTextResponse, Response, Streami
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
 
+from .assets import StoredAsset, get_asset_store
 from .config import get_settings
 from .export import to_markdown
 from .models import Actor, ApprovalDenied, Project, ProductionDocument, WorkflowStatus
@@ -47,12 +46,7 @@ SAMPLES = Path(__file__).parent / "samples"
 SAMPLE_SCRIPT = SAMPLES / "the_long_way_down.fountain"
 SAMPLE_CUT = SAMPLES / "the_long_way_down_roughcut.mp4"
 STATIC_DIR = Path(__file__).parent / "static"
-
-UPLOADS = Path(tempfile.gettempdir()) / "clearance-radar-uploads"
-UPLOADS.mkdir(parents=True, exist_ok=True)
-
-# Where each project's cut lives on disk, so the player can stream it back.
-_CUT_PATHS: dict[str, Path] = {}
+asset_store = get_asset_store()
 
 
 # --------------------------------------------------------------------------
@@ -121,19 +115,22 @@ async def _probe_duration(path: Path) -> float:
 
 
 async def _launch(
-    script_bytes: Optional[bytes],
-    script_name: Optional[str],
-    cut_path: Optional[Path],
-    cut_name: Optional[str],
+    script_asset: Optional[StoredAsset],
+    cut_asset: Optional[StoredAsset],
     title: str,
 ) -> Project:
-    duration = await _probe_duration(cut_path) if cut_path else 0.0
-    project = await start_project(
-        script_bytes, script_name, cut_path, cut_name, duration, title=title
-    )
-    if cut_path is not None:
-        _CUT_PATHS[project.id] = cut_path
-    return project
+    duration = 0.0
+    if cut_asset is not None:
+        async with asset_store.local_path(cut_asset.key) as cut_path:
+            duration = await _probe_duration(cut_path)
+    return await start_project(script_asset, cut_asset, duration, title=title)
+
+
+async def _read_upload(upload: UploadFile, label: str) -> bytes:
+    data = await upload.read(settings.max_upload_bytes + 1)
+    if len(data) > settings.max_upload_bytes:
+        raise HTTPException(status_code=413, detail=f"{label} is too large.")
+    return data
 
 
 @app.post("/api/projects")
@@ -151,32 +148,35 @@ async def create_project(
             "MOCK_RESEARCH=true to run against fixtures.",
         )
 
-    script_bytes: Optional[bytes] = None
-    script_name: Optional[str] = None
+    script_asset: Optional[StoredAsset] = None
     if script is not None:
-        script_bytes = await script.read()
-        script_name = script.filename or "screenplay.txt"
-        if len(script_bytes) > settings.max_upload_bytes:
-            raise HTTPException(status_code=413, detail="Screenplay is too large.")
+        script_bytes = await _read_upload(script, "Screenplay")
+        script_asset = await asset_store.put_bytes(
+            script_bytes,
+            script.filename or "screenplay.txt",
+            script.content_type or "application/octet-stream",
+        )
 
-    cut_path: Optional[Path] = None
-    cut_name: Optional[str] = None
+    cut_asset: Optional[StoredAsset] = None
     if cut is not None:
-        cut_name = cut.filename or "rough-cut.mp4"
-        cut_path = UPLOADS / f"{abs(hash(cut_name + str(id(cut))))}-{cut_name}"
-        size = 0
-        with cut_path.open("wb") as handle:
-            while chunk := await cut.read(1024 * 1024):
-                size += len(chunk)
-                if size > settings.max_upload_bytes:
-                    handle.close()
-                    cut_path.unlink(missing_ok=True)
-                    raise HTTPException(status_code=413, detail="Rough cut is too large.")
-                handle.write(chunk)
+        try:
+            cut_bytes = await _read_upload(cut, "Rough cut")
+        except HTTPException:
+            if script_asset is not None:
+                await asset_store.delete(script_asset.key)
+            raise
+        cut_asset = await asset_store.put_bytes(
+            cut_bytes,
+            cut.filename or "rough-cut.mp4",
+            cut.content_type or "video/mp4",
+        )
 
     try:
-        project = await _launch(script_bytes, script_name, cut_path, cut_name, title)
+        project = await _launch(script_asset, cut_asset, title)
     except ScreenplayParseError as exc:
+        for asset in (script_asset, cut_asset):
+            if asset is not None:
+                await asset_store.delete(asset.key)
         raise HTTPException(status_code=400, detail=str(exc)) from exc
     return _payload(project)
 
@@ -188,15 +188,15 @@ async def create_sample_project() -> dict[str, Any]:
             status_code=404,
             detail="Sample assets are missing. Run `python tools/generate_demo_assets.py`.",
         )
-    working = UPLOADS / SAMPLE_CUT.name
-    if not working.exists():
-        shutil.copy2(SAMPLE_CUT, working)
-
+    script_asset = await asset_store.put_bytes(
+        SAMPLE_SCRIPT.read_bytes(), SAMPLE_SCRIPT.name, "text/plain"
+    )
+    cut_asset = await asset_store.put_bytes(
+        SAMPLE_CUT.read_bytes(), SAMPLE_CUT.name, "video/mp4"
+    )
     project = await _launch(
-        SAMPLE_SCRIPT.read_bytes(),
-        SAMPLE_SCRIPT.name,
-        working,
-        SAMPLE_CUT.name,
+        script_asset,
+        cut_asset,
         "The Long Way Down",
     )
     return _payload(project)
@@ -246,14 +246,24 @@ async def get_packet(project_id: str) -> PlainTextResponse:
 @app.get("/api/projects/{project_id}/cut")
 async def get_cut(project_id: str, request: Request) -> Response:
     """Serve the rough cut with range support so the player can seek."""
-    path = _CUT_PATHS.get(project_id)
-    if path is None or not path.exists():
+    project = await _require(project_id)
+    if project.cut is None or not project.cut.storage_key:
         raise HTTPException(status_code=404, detail="No rough cut for this project.")
 
-    size = path.stat().st_size
+    try:
+        data = await asset_store.read_bytes(project.cut.storage_key)
+    except FileNotFoundError:
+        raise HTTPException(status_code=404, detail="Rough cut asset is missing.") from None
+
+    size = len(data)
+    media_type = project.cut.mime_type or "video/mp4"
     range_header = request.headers.get("range")
     if not range_header:
-        return FileResponse(path, media_type="video/mp4")
+        return Response(
+            content=data,
+            media_type=media_type,
+            headers={"Accept-Ranges": "bytes", "Content-Length": str(size)},
+        )
 
     try:
         units, _, span = range_header.partition("=")
@@ -271,21 +281,10 @@ async def get_cut(project_id: str, request: Request) -> Response:
         raise HTTPException(status_code=416, detail="Range not satisfiable.")
     length = end - start + 1
 
-    def stream():
-        with path.open("rb") as handle:
-            handle.seek(start)
-            remaining = length
-            while remaining > 0:
-                chunk = handle.read(min(256 * 1024, remaining))
-                if not chunk:
-                    break
-                remaining -= len(chunk)
-                yield chunk
-
-    return StreamingResponse(
-        stream(),
+    return Response(
+        content=data[start : end + 1],
         status_code=206,
-        media_type="video/mp4",
+        media_type=media_type,
         headers={
             "Content-Range": f"bytes {start}-{end}/{size}",
             "Accept-Ranges": "bytes",

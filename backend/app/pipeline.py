@@ -18,9 +18,9 @@ from __future__ import annotations
 import asyncio
 import logging
 from datetime import datetime, timezone
-from pathlib import Path
 from typing import Optional
 
+from .assets import StoredAsset, get_asset_store
 from .agents.cut_scan import scan_cut
 from .agents.reconcile import reconcile
 from .agents.script_scan import scan_script, script_context_digest
@@ -50,10 +50,8 @@ async def _emit(project: Project, phase, message: str, **detail) -> None:
 
 async def run_pipeline(
     project_id: str,
-    script_bytes: Optional[bytes],
-    script_name: Optional[str],
-    video_path: Optional[Path],
-    video_name: Optional[str],
+    script_asset: Optional[StoredAsset],
+    video_asset: Optional[StoredAsset],
     video_duration: float,
 ) -> None:
     project = await store.get(project_id)
@@ -66,18 +64,25 @@ async def run_pipeline(
         script_digest = ""
 
         # -- 1. script ------------------------------------------------------
-        if script_bytes and script_name:
+        asset_store = get_asset_store()
+        if script_asset is not None:
+            script_bytes = await asset_store.read_bytes(script_asset.key)
+            script_name = script_asset.original_name
             await _emit(project, "scanning_script", f"Reading {script_name}")
             doc = parse_screenplay(script_bytes, script_name)
-            version = ScriptVersion(
+            version = project.script or ScriptVersion(
                 label=f"script-v{len(project.script_history) + 1}",
                 filename=script_name,
-                title=doc.title,
-                page_count=doc.page_count,
-                scene_count=len(doc.scenes),
+                storage_key=script_asset.key,
+                mime_type=script_asset.mime_type,
+                size_bytes=script_asset.size_bytes,
             )
+            version.title = doc.title
+            version.page_count = doc.page_count
+            version.scene_count = len(doc.scenes)
             project.script = version
-            project.script_history.append(version)
+            if all(existing.id != version.id for existing in project.script_history):
+                project.script_history.append(version)
             project.title = doc.title
             await _emit(
                 project,
@@ -107,15 +112,21 @@ async def run_pipeline(
         # -- 2. cut ---------------------------------------------------------
         cut_rows = []
         cut_label = ""
-        if video_path is not None and video_name:
-            cut_version = CutVersion(
+        if video_asset is not None:
+            video_name = video_asset.original_name
+            cut_version = project.cut or CutVersion(
                 label=f"rough-cut-v{len(project.cut_history) + 1}",
                 filename=video_name,
                 duration_s=video_duration,
+                storage_key=video_asset.key,
+                mime_type=video_asset.mime_type,
+                size_bytes=video_asset.size_bytes,
+                gcs_uri=asset_store.cloud_uri(video_asset.key),
                 media_url=f"/api/projects/{project.id}/cut",
             )
             project.cut = cut_version
-            project.cut_history.append(cut_version)
+            if all(existing.id != cut_version.id for existing in project.cut_history):
+                project.cut_history.append(cut_version)
             cut_label = cut_version.label
 
             await _emit(
@@ -123,13 +134,14 @@ async def run_pipeline(
                 "scanning_cut",
                 f"Analysing {video_name} ({video_duration:.0f}s) with Gemini",
             )
-            cut_rows, notes = await scan_cut(
-                video_path,
-                project.title,
-                video_duration,
-                gcs_uri=cut_version.gcs_uri,
-                script_context=script_digest,
-            )
+            async with asset_store.local_path(video_asset.key) as video_path:
+                cut_rows, notes = await scan_cut(
+                    video_path,
+                    project.title,
+                    video_duration,
+                    gcs_uri=cut_version.gcs_uri,
+                    script_context=script_digest,
+                )
             await _emit(
                 project,
                 "scanning_cut",
@@ -318,19 +330,39 @@ async def research_item(project: Project, item: ClearanceItem) -> None:
 
 
 async def start_project(
-    script_bytes: Optional[bytes],
-    script_name: Optional[str],
-    video_path: Optional[Path],
-    video_name: Optional[str],
+    script_asset: Optional[StoredAsset],
+    video_asset: Optional[StoredAsset],
     video_duration: float,
     title: str = "Untitled production",
 ) -> Project:
     project = Project(title=title)
+    asset_store = get_asset_store()
+    if script_asset is not None:
+        project.script = ScriptVersion(
+            label="script-v1",
+            filename=script_asset.original_name,
+            storage_key=script_asset.key,
+            mime_type=script_asset.mime_type,
+            size_bytes=script_asset.size_bytes,
+        )
+        project.script_history.append(project.script)
+    if video_asset is not None:
+        project.cut = CutVersion(
+            label="rough-cut-v1",
+            filename=video_asset.original_name,
+            duration_s=video_duration,
+            storage_key=video_asset.key,
+            mime_type=video_asset.mime_type,
+            size_bytes=video_asset.size_bytes,
+            gcs_uri=asset_store.cloud_uri(video_asset.key),
+            media_url=f"/api/projects/{project.id}/cut",
+        )
+        project.cut_history.append(project.cut)
     project.log("project_created", actor="coordinator", rationale="Upload received.")
     await store.put(project)
     asyncio.create_task(
         run_pipeline(
-            project.id, script_bytes, script_name, video_path, video_name, video_duration
+            project.id, script_asset, video_asset, video_duration
         )
     )
     return project

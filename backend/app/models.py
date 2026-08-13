@@ -408,6 +408,9 @@ class ScriptVersion(BaseModel):
     title: str = ""
     page_count: int = 0
     scene_count: int = 0
+    storage_key: str = ""
+    mime_type: str = "application/octet-stream"
+    size_bytes: int = 0
     uploaded_at: str = Field(default_factory=_now)
 
 
@@ -416,6 +419,9 @@ class CutVersion(BaseModel):
     label: str = "rough-cut-v1"
     filename: str = ""
     duration_s: float = 0.0
+    storage_key: str = ""
+    mime_type: str = "video/mp4"
+    size_bytes: int = 0
     gcs_uri: Optional[str] = None
     media_url: str = ""
     uploaded_at: str = Field(default_factory=_now)

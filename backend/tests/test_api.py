@@ -6,8 +6,10 @@ import uuid
 import pytest
 from fastapi.testclient import TestClient
 
+import backend.app.main as main_module
+from backend.app.assets import FilesystemAssetStore
 from backend.app.main import app
-from backend.app.models import ClearanceItem, Project
+from backend.app.models import ClearanceItem, CutVersion, Project
 from backend.app.store import store
 
 
@@ -72,3 +74,34 @@ def test_human_transition_requires_a_rationale(
     )
 
     assert response.status_code == 422
+
+
+def test_cut_streaming_uses_persisted_asset_metadata(
+    client: TestClient, tmp_path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    asset_store = FilesystemAssetStore(tmp_path)
+    asset = asyncio.run(
+        asset_store.put_bytes(b"0123456789", "rough-cut.mp4", "video/mp4")
+    )
+    project = Project(
+        title="Restart-safe cut",
+        cut=CutVersion(
+            filename=asset.original_name,
+            storage_key=asset.key,
+            mime_type=asset.mime_type,
+            media_url="/api/projects/proj_restart/cut",
+        ),
+    )
+    asyncio.run(store.put(project))
+    monkeypatch.setattr(main_module, "asset_store", asset_store, raising=False)
+
+    persisted = client.get(f"/api/projects/{project.id}")
+    response = client.get(
+        f"/api/projects/{project.id}/cut", headers={"Range": "bytes=2-5"}
+    )
+
+    assert persisted.json()["cut"]["storage_key"] == asset.key
+    assert response.status_code == 206
+    assert response.content == b"2345"
+    assert response.headers["content-range"] == "bytes 2-5/10"
+    assert not hasattr(main_module, "_CUT_PATHS")
