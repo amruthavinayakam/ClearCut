@@ -1,269 +1,161 @@
-# ◎ Clearance Radar
+# ClearCut
 
-**Every frame. Every right. Every change.**
+ClearCut is a multimodal clearance-research workspace for film and television. It compares a screenplay with a cut, identifies material that may require clearance, researches candidate rights routes with citations, and gives a human coordinator one continuous place to review evidence, attach production documents, assess recorded scope, track revisions, and export a current research packet.
 
-A screenplay gets cleared before the shoot. Then the rough cut arrives carrying
-a poster nobody planned for, a package design the prop department bought that
-morning, and a music cue that was never in the script. Delivery is Friday.
+**Research for human legal review. ClearCut does not issue legal clearance.**
 
-Clearance Radar compares the page against the screen, pins every unresolved
-element to its exact frame, researches who controls it with citations, and
-keeps watching for public changes. **Humans make every legal decision** — the
-agent cannot mark anything cleared, and that is enforced in the type system, the
-API, and the tests.
+Built for the Agentic Cinema hackathon and the Parallel track.
 
-Built for the **Agentic Cinema** hackathon — **Parallel track**.
+## The full product flow
 
----
+1. **Open or create a production.** The library is the durable starting point, with archive/search support and an honest first-run state.
+2. **Upload the screenplay, the cut, or both.** Files are preflighted before project creation; the browser shows concrete validation and recovery states.
+3. **Watch analysis settle.** Gemini scans the screenplay and video, ClearCut reconciles the page against the screen, and Parallel research runs per case. Timecoded findings remain visible while work is in progress.
+4. **Review every case.** The workspace combines the case queue, picture/timeline, evidence graph, citations, candidate rights holders, gaps, assignment, and human disposition controls.
+5. **Attach the real production record.** Licences, releases, permits, and correspondence are stored as files with recorded media, territory, term, and use metadata. ClearCut compares that metadata with the production's intended-use profile and calls out gaps; it does not interpret a document as a legal conclusion.
+6. **Compare a new version.** A candidate revision is scanned as immutable state. Version Ripple reports `unchanged`, `added`, `removed`, `materially_changed`, and `decision_stale` outcomes. Applying a reviewed revision carries unchanged human records forward and reopens only affected cases.
+7. **Preview and export.** The packet is rebuilt from the active server record, shows incomplete research and document-scope gaps, and requires confirmation before a Markdown download and export audit event are created.
+8. **Continue later.** Deep-linked case selection, filters, search, queue width, open drawer, and playback position survive reload. `Cmd/Ctrl+K` opens the global command palette outside text inputs.
 
-## What it does
+The interface is intentionally ultraminimal: editorial type, near-black surfaces, one warm action accent, and semantic colour reserved for evidence state. Desktop, tablet, mobile, keyboard, and reduced-motion paths are covered by browser tests.
 
-```
-screenplay.pdf ──┐
-                 ├──► Gemini reads both ──► reconcile ──► research ──► human sign-off ──► monitor
-rough-cut.mp4 ───┘
-```
+## What the agents do
 
-| Stage | What happens |
-|---|---|
-| **Script scan** | Gemini (ADK agent, structured output) extracts clearance candidates with scene, page, and verbatim excerpt. Generic mentions — "a photograph on the wall" — are flagged too, because production *will* hang a real one. |
-| **Cut scan** | Gemini reads the video directly and returns **timecoded** candidates, transcribing on-screen text so the element can actually be researched. |
-| **Reconcile** | Every item is classified `in_both`, `script_only`, `cut_only`, or `materially_changed`. |
-| **Research** | **Parallel Search** runs first for live cited retrieval, then **Parallel Task** builds a schema-validated dossier. |
-| **Review** | The agent stops at `evidence_ready`. A coordinator verifies; counsel signs off. |
-| **Monitor** | **Parallel Monitor** watches unresolved items and reopens them by webhook when the public picture changes. |
-
-### The two relationships that matter
-
-**`cut_only`** — it appeared on the day and nobody planned for it, so nothing has
-been researched. This is where productions get hurt.
-
-**`materially_changed`** — the script said *"a photograph of a harbour at night"*
-and the cut shows *"HARBOR LIGHTS, 1961 · est. of M. Vance"*. The generic
-reference needed no clearance. The specific work does. Nobody was warned.
-
-On the seeded demo, the reconciler produces exactly that finding, unprompted:
-
-> *"The script's generic 'photograph of a harbour at night' was realized as the
-> specific artwork 'HARBOR LIGHTS, 1961' by M. Vance."*
-
----
-
-## The safety property
-
-**The agent cannot approve anything.** Not "is instructed not to" — cannot.
-
-```python
-HUMAN_OWNED_STATUSES = frozenset({
-    "coordinator_verified", "counsel_approved",
-    "documented_permission", "approved_replacement", "false_positive",
-})
+```text
+screenplay ──┐
+             ├─ Gemini scan ─ reconcile ─ Parallel Search + Task ─ human review
+rough cut ───┘                                      │
+                                                   └─ Parallel Monitor → reopen on change
 ```
 
-`ClearanceItem.transition()` raises `ApprovalDenied` if the actor does not own
-the target status, and the agent calls it through the same path as everyone
-else — there is no privileged route. The API returns **403**. The UI has a
-button, *"Test: let the AI approve it"*, that fires `actor=agent` at a
-human-owned status so you can watch the server refuse it live.
+- **Gemini screenplay scan** extracts named and generic clearable candidates with source anchors.
+- **Gemini cut scan** reads the actual video, returning timecoded visual/audio candidates and readable on-screen text.
+- **Reconciliation** distinguishes elements found in both inputs from script-only, cut-only, and materially changed uses.
+- **Parallel Search** retrieves public evidence and citations quickly.
+- **Parallel Task** produces a schema-validated dossier with candidate holders, possible licensing routes, evidence gaps, open questions, and recommended human actions.
+- **Parallel Monitor** can watch unresolved public facts; an authenticated webhook reopens the linked case without overwriting its history.
+- **The copilot** can explain the current stored record and invoke live research, but it cannot make a human-owned disposition.
 
-The test suite asserts it as a property, not an example:
+The principal integration points are in [`parallel_client.py`](backend/app/parallel_client.py), [`pipeline.py`](backend/app/pipeline.py), the agents under [`backend/app/agents`](backend/app/agents), and the webhook in [`main.py`](backend/app/main.py).
 
-```
-PASS  no agent-reachable status is green
-PASS  agent refused 'counsel_approved'
-PASS  coordinator refused counsel_approved
-PASS  counsel may approve
-```
+## Safety model
 
-Unknown ownership can never come back green either. If research cannot
-establish a rights holder, the item goes to `unresolved` — you cannot licence
-what you cannot find.
+The workflow enforces ownership at the model and API layers. Agent and system actors may research a case up to `evidence_ready`; they cannot set coordinator, counsel, permission, replacement, or false-positive outcomes. Coordinator and counsel actions require a rationale, and approval-like outcomes require supporting production documents where applicable.
 
----
+Late research cannot overwrite a human disposition. Revision application is predecessor-checked, idempotent, and based on the stored comparison—not a browser-supplied list of changes. Packet previewing creates no audit event; a confirmed export does.
 
-## Where the platforms are actually used
+## Architecture
 
-Imported and called in code, not merely named:
+- **Backend:** Python, FastAPI, Pydantic, Google ADK / Gemini, Parallel APIs
+- **Frontend:** React, TypeScript, Vite, local Manrope and Newsreader font packages
+- **Project persistence:** in memory by default; Firestore when `USE_FIRESTORE=true`
+- **Asset persistence:** filesystem under `ASSET_STORAGE_DIR` by default; Google Cloud Storage when `GCS_BUCKET` is set
+- **Production serving:** one FastAPI process serves both `/api` and the built frontend in `backend/app/static`
+- **Live progress:** Server-Sent Events with polling recovery
 
-| | Where | What |
-|---|---|---|
-| **Parallel Search** | [`parallel_client.py`](backend/app/parallel_client.py) `search_evidence` | Live retrieval per item; results stream into the UI as they arrive |
-| **Parallel Search** | [`agents/copilot.py`](backend/app/agents/copilot.py) `parallel_live_search` | ADK `FunctionTool` — the copilot researches instead of guessing |
-| **Parallel Task** | [`parallel_client.py`](backend/app/parallel_client.py) `build_dossier` | Strict JSON schema, per-field `basis` citations |
-| **Parallel Monitor** | [`parallel_client.py`](backend/app/parallel_client.py) `create_item_monitor` | Event stream with backfill, so a new watch is not empty |
-| **Parallel webhook** | [`main.py`](backend/app/main.py) `/api/webhooks/parallel` | `monitor.event.detected` reopens the linked item |
-| **Gemini multimodal** | [`agents/cut_scan.py`](backend/app/agents/cut_scan.py) | Video in, timecoded detections out |
-| **Gemini + ADK** | [`script_scan`](backend/app/agents/script_scan.py), [`reconcile`](backend/app/agents/reconcile.py), [`drafting`](backend/app/agents/drafting.py), [`copilot`](backend/app/agents/copilot.py) | Four `LlmAgent`s, three with Pydantic `output_schema` |
-| **Cloud Run** | [`Dockerfile`](Dockerfile), [`deploy.ps1`](deploy.ps1) | One container serves API + UI |
-| **Secret Manager** | [`deploy.ps1`](deploy.ps1) | The Parallel key is never a console env var |
-| **Cloud Storage** | [`cut_scan.py`](backend/app/agents/cut_scan.py) | `GCS_BUCKET` set → Gemini reads the cut by URI instead of inline |
-| **Firestore** *(optional)* | [`store.py`](backend/app/store.py) | Projects and audit trail survive an instance restart |
+Project records store opaque asset keys rather than process-local paths. In a cloud configuration, set both Firestore and Cloud Storage so metadata, audit history, screenplays, cuts, and attached documents survive instance replacement. Parallel monitor records are currently process-local even when Firestore is enabled.
 
----
+## Run locally
 
-## Measured results on the seeded demo
-
-The demo assets are generated by [`tools/generate_demo_assets.py`](tools/generate_demo_assets.py)
-with five deliberately planted elements, so recall is checkable rather than
-claimed.
-
-| | |
-|---|---|
-| Planted elements detected in the cut | **5 / 5** |
-| False positives | **0** |
-| Timecode accuracy | within **0.5 s** of ground truth |
-| Unscripted elements caught | **3 / 3** |
-| `materially_changed` correctly identified | **1 / 1** |
-| Sources cited across the project | **147** |
-| AI-issued approvals | **0** |
-
-The cut scanner transcribed on-screen text exactly — `MIDNIGHT ORCHARD / R.
-OKONKWO • 1974` — which is what makes the element researchable at all.
-
-It also correctly refuses to invent owners. `MIDNIGHT ORCHARD` is a fictional
-artwork, and research returned **zero** candidate holders and an honest list of
-gaps, including *"whether the physical framed print was rented, purchased,
-borrowed, or supplied by a prop house, and whether the production received any
-rights paperwork with it."*
-
----
-
-## Demo assets are original by construction
-
-A project about clearance must not ship uncleared third-party material. The
-screenplay, the rough cut, the brands (`NORTHSTAR COLA`), the artworks
-(`MIDNIGHT ORCHARD`, `HARBOR LIGHTS, 1961`), the signage (`THE VELVET ROOM`),
-and the instrumental music cue are all invented for this repo and rendered from
-code with Pillow, NumPy, and a bundled ffmpeg.
-
-```bash
-python tools/generate_demo_assets.py
-```
-
----
-
-## Running it
-
-### Prerequisites
-
-- Python 3.11+ and Node 20+
-- A Google Cloud project with billing enabled
-- A [Parallel](https://platform.parallel.ai) API key
-
-### Setup
+Prerequisites: Python 3.11+, Node 20+, a Parallel API key, and either Vertex AI Application Default Credentials or a Google AI Studio key.
 
 ```bash
 cp .env.example .env
+python -m venv .venv
+.venv/bin/pip install -r requirements.txt
+cd frontend
+npm install
+npm run build
+cd ..
 ```
 
-Fill in `GOOGLE_CLOUD_PROJECT` and `PARALLEL_API_KEY`, and set `MOCK_RESEARCH=false`.
+For Vertex AI:
 
 ```bash
 gcloud auth application-default login
 ```
 
-```bash
-gcloud services enable aiplatform.googleapis.com --project YOUR_PROJECT_ID
-```
+Start the built application through Portless:
 
 ```bash
-python -m venv .venv && .venv/bin/pip install -r requirements.txt
+PORTLESS_TLD=lcl portless clearcut --app-port 8080 .venv/bin/python -m uvicorn backend.app.main:app --host 127.0.0.1 --port 8080
 ```
+
+Open [https://clearcut.lcl](https://clearcut.lcl).
+
+For frontend development, keep the backend on port 8080 and run:
 
 ```bash
-cd frontend && npm install && npm run build
+cd frontend
+npm run dev
 ```
 
-```bash
-.venv/bin/python -m uvicorn backend.app.main:app --port 8080
-```
-
-Open <http://localhost:8080> and click **Run the seeded demo**.
-
-On Windows use `.venv\Scripts\python.exe`. If `gcloud` complains about Python
-2.7, set `CLOUDSDK_PYTHON` to a Python 3 executable.
-
-### Without credentials
-
-`MOCK_RESEARCH=true` serves Parallel from fixtures — the pipeline runs, no key,
-no bill. Every fixture value is prefixed `MOCK:` so it can never be mistaken for
-a sourced finding, and the UI shows a `mock research` badge. Google Cloud
-credentials are still required, because the scans are real Gemini calls.
-
-### Tests
-
-```bash
-python -m backend.tests.test_offline
-```
-
-55 checks, no credentials needed. Covers the approval invariant, status/colour
-mapping, screenplay parsing, reconciliation bookkeeping, packet export, and the
-progress bus.
-
----
-
-## Deploying
-
-```bash
-./deploy.ps1 -ProjectId YOUR_PROJECT_ID -ParallelApiKey pk_xxx
-```
-
-Enables the APIs, stores the Parallel key in Secret Manager, creates a
-least-privilege service account, deploys, then re-deploys with `PUBLIC_BASE_URL`
-set so Monitor webhooks can reach the service.
-
----
-
-## How long a run takes
-
-A `core` Task run is ~3–4 minutes of real web research. Items fan out
-`RESEARCH_CONCURRENCY` at a time:
-
-```
-ceil(items / RESEARCH_CONCURRENCY) × ~4 min  +  ~2 min for the scans
-```
-
-The seeded demo (11 items, concurrency 16) lands in about six minutes. Parallel
-Search results appear within seconds, so the UI is populated long before the
-dossiers land. Drop `PARALLEL_PROCESSOR` to `base` to trade depth for speed.
-
----
+That frontend is available at [https://clearcut-frontend.lcl](https://clearcut-frontend.lcl) and proxies `/api` to the backend.
 
 ## Configuration
 
-| Variable | Default | |
-|---|---|---|
-| `GOOGLE_CLOUD_PROJECT` | — | GCP project id |
+| Variable | Default | Purpose |
+|---|---:|---|
+| `GOOGLE_CLOUD_PROJECT` | — | Vertex AI and Google Cloud project ID |
 | `GOOGLE_CLOUD_LOCATION` | `global` | Vertex AI location |
-| `GOOGLE_GENAI_USE_VERTEXAI` | `TRUE` | `FALSE` to use an AI Studio key |
-| `GEMINI_MODEL` | *(probe)* | Pin a model, skipping the startup probe |
-| `GCS_BUCKET` | — | Set to read cuts from Cloud Storage instead of inline |
-| `PARALLEL_API_KEY` | — | Parallel key |
-| `PARALLEL_SEARCH_MODE` | `basic` | `turbo`, `basic`, or `advanced` |
-| `PARALLEL_PROCESSOR` | `core` | `lite`/`base`/`core`/`pro`/`ultra` |
-| `RESEARCH_CONCURRENCY` | `16` | In-flight research runs |
-| `MOCK_RESEARCH` | `false` | Serve fixtures instead of calling Parallel |
-| `USE_FIRESTORE` | `false` | Persist projects and audit trail |
-| `PUBLIC_BASE_URL` | — | Public origin; required for Monitor webhooks |
-| `PARALLEL_WEBHOOK_SECRET` | — | Require `x-radar-secret` on webhooks |
+| `GOOGLE_GENAI_USE_VERTEXAI` | `TRUE` | Use Vertex AI; set `FALSE` for AI Studio |
+| `GOOGLE_API_KEY` | — | AI Studio key when Vertex is disabled |
+| `GEMINI_MODEL` | probe | Optional model pin |
+| `PARALLEL_API_KEY` | — | Parallel Search, Task, and Monitor key |
+| `PARALLEL_SEARCH_MODE` | `basic` | Search processor mode |
+| `PARALLEL_PROCESSOR` | `core` | Structured Task processor |
+| `PARALLEL_MONITOR_PROCESSOR` | `base` | Monitor processor |
+| `RESEARCH_CONCURRENCY` | `16` | Concurrent per-case research jobs |
+| `USE_FIRESTORE` | `false` | Persist project records and audit history |
+| `FIRESTORE_COLLECTION` | `clearance_projects` | Firestore collection |
+| `ASSET_STORAGE_DIR` | system temp | Local asset directory when GCS is unset |
+| `GCS_BUCKET` | — | Store assets in GCS and give Gemini a `gs://` cut URI |
+| `PUBLIC_BASE_URL` | — | Public HTTPS origin used for Monitor webhooks |
+| `PARALLEL_WEBHOOK_SECRET` | — | Required `x-radar-secret` value for webhooks |
+| `MAX_UPLOAD_BYTES` | `209715200` | Server upload ceiling |
+| `MOCK_RESEARCH` | `false` | Explicit local fixture research mode |
 
----
+`MOCK_RESEARCH=true` is a development aid; its fixture values are deliberately prefixed `MOCK:`. It is not used to turn browser-test output into a product claim.
 
-## Limits, honestly
+## Verification
 
-- **This is research support, not legal advice, and nothing it produces is a
-  legal clearance.** It exists to make a clearance professional dramatically
-  faster. Counsel owns every legal conclusion.
-- **The cut scanner is a candidate detector**, not a trademark registry or an
-  audio fingerprinter. It reports what it can see and hear, flags low
-  confidence, and leaves ambiguity ambiguous.
-- **Rights holders are candidates** derived from public sources, with citations
-  and retrieval dates. Confirm before reliance.
-- **Scanned PDFs need OCR first.** Clearance Radar reads the text layer and says
-  so rather than silently returning nothing.
-- **In-memory by default.** Set `USE_FIRESTORE=true` for anything you care about
-  keeping.
+Install Playwright's pinned Chromium once:
+
+```bash
+cd frontend
+npx playwright install chromium
+```
+
+Run the release gate:
+
+```bash
+.venv/bin/pytest backend/tests -q
+.venv/bin/python -m backend.tests.test_offline
+cd frontend
+npm test
+npm run build
+npm run test:e2e
+```
+
+Then verify the running server:
+
+```bash
+curl -sk https://clearcut.lcl/api/health
+```
+
+The Playwright suite covers creation through review, document scope gaps, immutable revision application, confirmed packet export/audit, reload continuity, keyboard commands, reduced motion, serious/critical accessibility violations, focus restoration/trapping, responsive overflow, local font loading, settled motion, and visual baselines for boot, empty/returning library, intake, processing, review, partial scope, revision comparison, packet, tablet, and mobile states.
+
+Browser E2E tests intercept only root `/api` requests with deterministic route fixtures. They use no live credentials, do not ship a mock API inside the product, and assert the same state transitions the UI consumes from FastAPI. Backend integration and invariant tests exercise the real server code.
+
+## Limits
+
+- ClearCut supports clearance research; it is not legal advice and does not determine whether a use is lawful.
+- Detection produces candidates, not a guarantee of exhaustive trademark, copyright, music, privacy, or publicity-rights identification.
+- Candidate rights holders and licensing routes come from public research and must be confirmed by a qualified human.
+- Scope assessment compares recorded metadata; it does not parse legal meaning from the attached document.
+- Scanned screenplay PDFs need a usable text layer or OCR before upload.
+- Without Firestore and GCS, local state and assets are suitable for development, not durable deployment.
 
 ## License
 
-MIT — see [LICENSE](LICENSE).
+MIT — see [`LICENSE`](LICENSE).

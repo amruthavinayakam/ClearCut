@@ -1368,7 +1368,13 @@ kbd {
 }
 
 .ripple-changes li[data-change="unchanged"] {
-  opacity: 0.45;
+  color: var(--dismissed);
+}
+
+.ripple-changes li[data-change="unchanged"] strong,
+.ripple-changes li[data-change="unchanged"] span,
+.ripple-changes li[data-change="unchanged"] small {
+  color: var(--dismissed);
 }
 
 .ripple-changes li[data-change="added"] strong { color: var(--amber); }

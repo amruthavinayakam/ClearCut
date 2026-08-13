@@ -63,7 +63,7 @@ export default function ProjectLibrary({
 
   if (projects.length === 0 && !archived) {
     return (
-      <section className="library-empty" aria-labelledby="first-run-title">
+      <main className="library-empty" aria-labelledby="first-run-title">
         <p className="eyebrow">ClearCut · clearance research workspace</p>
         <h1 id="first-run-title">Find what entered between the page and the screen.</h1>
         <p className="library-empty__notice">
@@ -83,12 +83,12 @@ export default function ProjectLibrary({
             </button>
           )}
         </div>
-      </section>
+      </main>
     );
   }
 
   return (
-    <section className="project-library" aria-labelledby="projects-title">
+    <main className="project-library" aria-labelledby="projects-title">
       <div className="project-library__head">
         <div>
           <p className="eyebrow">Production clearance</p>
@@ -159,6 +159,6 @@ export default function ProjectLibrary({
       >
         {archived ? "Back to active projects" : "View archived projects"}
       </button>
-    </section>
+    </main>
   );
 }

@@ -49,26 +49,6 @@ export default function ItemDetail({ projectId, item, onChanged, onSeek }: Props
     }
   }
 
-  /** Deliberate: proves the server refuses, live, in front of the judges. */
-  async function attemptAgentApproval() {
-    setBusy(true);
-    setError(null);
-    try {
-      await api.setStatus(
-        projectId,
-        item.id,
-        "counsel_approved",
-        "agent",
-        "Agent attempting to self-approve — this must be refused.",
-      );
-      setError("UNEXPECTED: the server allowed an agent approval. That is a bug.");
-    } catch (exc) {
-      setError(`Refused by the server (as designed): ${(exc as Error).message}`);
-    } finally {
-      setBusy(false);
-    }
-  }
-
   async function draft() {
     setDrafting(true);
     setError(null);
@@ -295,14 +275,6 @@ export default function ItemDetail({ projectId, item, onChanged, onSeek }: Props
             </button>
             <button className="btn small" disabled={busy || Boolean(item.monitor_id)} onClick={watch}>
               {item.monitor_id ? "Monitor active" : "Watch for changes"}
-            </button>
-            <button
-              className="btn small ghost"
-              disabled={busy}
-              onClick={attemptAgentApproval}
-              title="Sends actor=agent with a human-owned status. The server must refuse."
-            >
-              Test: let the AI approve it
             </button>
           </div>
         </div>
