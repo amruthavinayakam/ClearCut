@@ -32,6 +32,7 @@ from .parallel_client import (
     search_evidence,
 )
 from .screenplay import parse_screenplay
+from .revisions import build_candidate_revision, ensure_initial_revision
 from .store import store
 
 logger = logging.getLogger(__name__)
@@ -185,6 +186,7 @@ async def run_pipeline(
 
         if not items:
             project.phase = "ready"
+            ensure_initial_revision(project)
             await store.put(project)
             store.publish(project.id, {"type": "done", "phase": "ready"})
             return
@@ -204,6 +206,7 @@ async def run_pipeline(
             actor="agent",
             rationale="Evidence assembled. All approval decisions remain with the coordinator.",
         )
+        ensure_initial_revision(project)
         await store.put(project)
         summary = project.summary()
         await _emit(project, "ready", "Evidence ready for review", **summary)
@@ -378,3 +381,134 @@ async def start_project(
         )
     )
     return project
+
+
+async def run_revision_pipeline(project_id: str, revision_id: str) -> None:
+    """Analyse a detached candidate without replacing the active project state."""
+    project = await store.get(project_id)
+    if project is None:
+        return
+    placeholder = next(
+        (revision for revision in project.revisions if revision.id == revision_id),
+        None,
+    )
+    if placeholder is None:
+        return
+
+    async def progress(message: str, **detail) -> None:
+        project.activity_events.append(
+            ActivityEvent(
+                phase="revision_processing",
+                message=message,
+                detail={"revision_id": revision_id, **detail},
+            )
+        )
+        project.activity_events = project.activity_events[-500:]
+        await store.put(project)
+        store.publish(
+            project.id,
+            {
+                "type": "revision_progress",
+                "revision_id": revision_id,
+                "message": message,
+                "detail": detail,
+            },
+        )
+
+    asset_store = get_asset_store()
+    try:
+        script_items: list[ClearanceItem] = []
+        script_digest = ""
+        title = project.title
+        script_version = placeholder.script
+        if script_version and script_version.storage_key:
+            await progress(f"Reading {script_version.filename}")
+            script_bytes = await asset_store.read_bytes(script_version.storage_key)
+            document = parse_screenplay(script_bytes, script_version.filename)
+            script_version.title = document.title
+            script_version.page_count = document.page_count
+            script_version.scene_count = len(document.scenes)
+            title = document.title or title
+            script_items = await scan_script(document, script_version.label)
+            script_digest = script_context_digest(script_items)
+            await progress(
+                f"Candidate screenplay produced {len(script_items)} clearance element(s)",
+                count=len(script_items),
+            )
+
+        cut_rows = []
+        cut_version = placeholder.cut
+        cut_label = script_version.label if script_version else "script only"
+        if cut_version and cut_version.storage_key:
+            await progress(f"Analysing {cut_version.filename}")
+            async with asset_store.local_path(cut_version.storage_key) as video_path:
+                cut_rows, _ = await scan_cut(
+                    video_path,
+                    title,
+                    cut_version.duration_s,
+                    gcs_uri=cut_version.gcs_uri,
+                    script_context=script_digest,
+                )
+            cut_label = cut_version.label
+            await progress(
+                f"Candidate cut produced {len(cut_rows)} detected element(s)",
+                count=len(cut_rows),
+            )
+
+        items, _ = await reconcile(script_items, cut_rows, cut_label)
+        candidate = build_candidate_revision(
+            project,
+            items,
+            script=script_version,
+            cut=cut_version,
+            revision_id=placeholder.id,
+        )
+        candidate.sequence = placeholder.sequence
+        candidate.created_at = placeholder.created_at
+        project.revisions = [
+            candidate if revision.id == revision_id else revision
+            for revision in project.revisions
+        ]
+        project.log(
+            "revision_compared",
+            actor="agent",
+            rationale=f"Revision {candidate.sequence} is ready for human comparison.",
+            detail={
+                "revision_id": candidate.id,
+                "changes": {
+                    kind: sum(change.kind == kind for change in candidate.changes)
+                    for kind in (
+                        "unchanged",
+                        "added",
+                        "removed",
+                        "materially_changed",
+                        "decision_stale",
+                    )
+                },
+            },
+        )
+        await store.put(project)
+        store.publish(
+            project.id,
+            {"type": "revision_ready", "revision_id": candidate.id},
+        )
+    except Exception:  # noqa: BLE001 - active state remains intact by construction
+        logger.exception("Revision comparison failed for %s", revision_id)
+        placeholder.state = "failed"
+        placeholder.error = "Comparison stopped. The active revision was not changed."
+        project.activity_events.append(
+            ActivityEvent(
+                phase="revision_failed",
+                message=placeholder.error,
+                detail={"revision_id": revision_id},
+            )
+        )
+        await store.put(project)
+        store.publish(
+            project.id,
+            {
+                "type": "revision_failed",
+                "revision_id": revision_id,
+                "message": placeholder.error,
+            },
+        )

@@ -261,6 +261,7 @@ class ProductionDocument(BaseModel):
 
 class ClearanceItem(BaseModel):
     id: str = Field(default_factory=lambda: _uid("item"))
+    stable_item_id: str = Field(default_factory=lambda: _uid("stable"))
     name: str
     category: Category
     description: str = ""
@@ -457,6 +458,39 @@ ProjectPhase = Literal[
     "failed",
 ]
 
+RevisionChangeKind = Literal[
+    "unchanged",
+    "added",
+    "removed",
+    "materially_changed",
+    "decision_stale",
+]
+
+
+class RevisionChange(BaseModel):
+    kind: RevisionChangeKind
+    stable_item_id: str
+    item_name: str
+    before_item_id: Optional[str] = None
+    after_item_id: Optional[str] = None
+    explanation: str = ""
+    match_basis: str = ""
+    previous_status: Optional[WorkflowStatus] = None
+
+
+class ProjectRevision(BaseModel):
+    id: str = Field(default_factory=lambda: _uid("revision"))
+    sequence: int
+    script: Optional[ScriptVersion] = None
+    cut: Optional[CutVersion] = None
+    state: Literal["processing", "ready", "failed", "applied"] = "processing"
+    items: list[ClearanceItem] = Field(default_factory=list)
+    changes: list[RevisionChange] = Field(default_factory=list)
+    predecessor_id: Optional[str] = None
+    created_at: str = Field(default_factory=_now)
+    applied_at: Optional[str] = None
+    error: Optional[str] = None
+
 
 class Project(BaseModel):
     id: str = Field(default_factory=lambda: _uid("proj"))
@@ -477,6 +511,8 @@ class Project(BaseModel):
     audit_events: list[AuditEvent] = Field(default_factory=list)
     activity_events: list[ActivityEvent] = Field(default_factory=list)
     use_profile: IntendedUseProfile = Field(default_factory=IntendedUseProfile)
+    revisions: list[ProjectRevision] = Field(default_factory=list)
+    active_revision_id: Optional[str] = None
 
     def item(self, item_id: str) -> Optional[ClearanceItem]:
         return next((i for i in self.items if i.id == item_id), None)

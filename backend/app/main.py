@@ -20,8 +20,23 @@ from .assets import StoredAsset, get_asset_store
 from .config import get_settings
 from .documents import DocumentMetadataPatch, comma_list, find_document, scope_for
 from .export import to_markdown
-from .models import Actor, ApprovalDenied, Project, ProductionDocument, WorkflowStatus
-from .pipeline import research_item, start_project
+from .models import (
+    Actor,
+    ApprovalDenied,
+    CutVersion,
+    Project,
+    ProductionDocument,
+    ProjectRevision,
+    ScriptVersion,
+    WorkflowStatus,
+)
+from .pipeline import research_item, run_revision_pipeline, start_project
+from .revisions import (
+    RevisionComparisonError,
+    RevisionConflictError,
+    apply_revision,
+    ensure_initial_revision,
+)
 from .scope import IntendedUseProfile
 from .screenplay import (
     NoTextLayerError,
@@ -89,7 +104,7 @@ async def config() -> dict[str, Any]:
 
 
 def _payload(project: Project) -> dict[str, Any]:
-    data = project.model_dump(mode="json")
+    data = project.model_dump(mode="json", exclude={"revisions"})
     data["summary"] = project.summary()
     for raw, item in zip(data.get("items", []), project.items):
         raw["color"] = item.color
@@ -436,6 +451,169 @@ async def get_packet(project_id: str) -> PlainTextResponse:
             "Content-Disposition": f'attachment; filename="clearance-packet-{project_id}.md"'
         },
     )
+
+
+# --------------------------------------------------------------------------
+# Revision snapshots
+# --------------------------------------------------------------------------
+
+
+def _revision_payload(revision: ProjectRevision, *, include_items: bool = True) -> dict[str, Any]:
+    if include_items:
+        return revision.model_dump(mode="json")
+    return revision.model_dump(mode="json", exclude={"items"}) | {
+        "item_count": len(revision.items),
+        "change_counts": {
+            kind: sum(change.kind == kind for change in revision.changes)
+            for kind in (
+                "unchanged",
+                "added",
+                "removed",
+                "materially_changed",
+                "decision_stale",
+            )
+        },
+    }
+
+
+@app.get("/api/projects/{project_id}/revisions")
+async def list_revisions(project_id: str) -> dict[str, Any]:
+    project = await _require(project_id)
+    if not project.revisions and project.phase == "ready":
+        ensure_initial_revision(project)
+        await store.put(project)
+    return {
+        "active_revision_id": project.active_revision_id,
+        "revisions": [
+            _revision_payload(revision, include_items=False)
+            for revision in sorted(project.revisions, key=lambda value: value.sequence)
+        ],
+    }
+
+
+@app.get("/api/projects/{project_id}/revisions/{revision_id}")
+async def get_revision(project_id: str, revision_id: str) -> dict[str, Any]:
+    project = await _require(project_id)
+    revision = next((value for value in project.revisions if value.id == revision_id), None)
+    if revision is None:
+        raise HTTPException(status_code=404, detail="Revision not found.")
+    return _revision_payload(revision)
+
+
+@app.post("/api/projects/{project_id}/revisions")
+async def create_revision(
+    project_id: str,
+    script: Optional[UploadFile] = File(default=None),
+    cut: Optional[UploadFile] = File(default=None),
+) -> dict[str, Any]:
+    if script is None and cut is None:
+        raise HTTPException(status_code=400, detail="Upload a revised screenplay, cut, or both.")
+    project = await _require(project_id)
+    if not project.revisions:
+        ensure_initial_revision(project)
+    if not project.active_revision_id:
+        raise HTTPException(status_code=409, detail="The active project has no revision snapshot.")
+
+    uploaded_assets: list[StoredAsset] = []
+    script_version = project.script.model_copy(deep=True) if project.script else None
+    cut_version = project.cut.model_copy(deep=True) if project.cut else None
+    try:
+        if script is not None:
+            script_bytes = await _read_upload(script, "Screenplay")
+            result = await _preflight_bytes(
+                script_bytes,
+                script.filename or "screenplay.txt",
+                script.content_type or "application/octet-stream",
+            )
+            _raise_preflight(result)
+            if result.kind != "screenplay":
+                raise HTTPException(status_code=400, detail="The revised screenplay is not a screenplay document.")
+            asset = await asset_store.put_bytes(script_bytes, result.filename, result.mime_type)
+            uploaded_assets.append(asset)
+            script_version = ScriptVersion(
+                label=f"script-v{len(project.script_history) + 1}",
+                filename=asset.original_name,
+                title=str(result.details.get("title") or ""),
+                page_count=int(result.details.get("page_count") or 0),
+                scene_count=int(result.details.get("scene_count") or 0),
+                storage_key=asset.key,
+                mime_type=asset.mime_type,
+                size_bytes=asset.size_bytes,
+            )
+        if cut is not None:
+            cut_bytes = await _read_upload(cut, "Rough cut")
+            result = await _preflight_bytes(
+                cut_bytes,
+                cut.filename or "rough-cut.mp4",
+                cut.content_type or "video/mp4",
+            )
+            _raise_preflight(result)
+            if result.kind != "cut":
+                raise HTTPException(status_code=400, detail="The revised cut is not a video container.")
+            asset = await asset_store.put_bytes(cut_bytes, result.filename, result.mime_type)
+            uploaded_assets.append(asset)
+            cut_version = CutVersion(
+                label=f"rough-cut-v{len(project.cut_history) + 1}",
+                filename=asset.original_name,
+                duration_s=float(result.details.get("duration_s") or 0),
+                storage_key=asset.key,
+                mime_type=asset.mime_type,
+                size_bytes=asset.size_bytes,
+                gcs_uri=asset_store.cloud_uri(asset.key),
+                media_url=f"/api/projects/{project.id}/cut",
+            )
+    except Exception:
+        for asset in uploaded_assets:
+            await asset_store.delete(asset.key)
+        raise
+
+    revision = ProjectRevision(
+        sequence=max(value.sequence for value in project.revisions) + 1,
+        script=script_version,
+        cut=cut_version,
+        state="processing",
+        predecessor_id=project.active_revision_id,
+    )
+    project.revisions.append(revision)
+    project.log(
+        "revision_uploaded",
+        actor="coordinator",
+        rationale=f"Revision {revision.sequence} uploaded for comparison.",
+        detail={"revision_id": revision.id, "predecessor_id": revision.predecessor_id},
+    )
+    await store.put(project)
+    asyncio.create_task(run_revision_pipeline(project.id, revision.id))
+    return _revision_payload(revision)
+
+
+class RevisionApplyRequest(BaseModel):
+    predecessor_id: Optional[str] = None
+
+
+@app.post("/api/projects/{project_id}/revisions/{revision_id}/apply")
+async def promote_revision(
+    project_id: str,
+    revision_id: str,
+    body: RevisionApplyRequest,
+) -> dict[str, Any]:
+    project = await _require(project_id)
+    try:
+        revision, already_applied = apply_revision(project, revision_id, body.predecessor_id)
+    except RevisionConflictError as exc:
+        raise HTTPException(status_code=409, detail=str(exc)) from exc
+    except RevisionComparisonError as exc:
+        status = 404 if "not found" in str(exc).lower() else 409
+        raise HTTPException(status_code=status, detail=str(exc)) from exc
+    await store.put(project)
+    store.publish(
+        project.id,
+        {"type": "revision_applied", "revision_id": revision.id},
+    )
+    return {
+        "revision": _revision_payload(revision),
+        "project": _payload(project),
+        "already_applied": already_applied,
+    }
 
 
 @app.get("/api/projects/{project_id}/cut")
