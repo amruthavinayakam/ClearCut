@@ -239,6 +239,20 @@ export const api = {
     }),
 
   packetUrl: (projectId: string) => `/api/projects/${projectId}/packet.md`,
+  confirmPacketExport: async (projectId: string) => {
+    const response = await fetch(`/api/projects/${projectId}/packet-exports`, { method: "POST" });
+    if (!response.ok) {
+      let detail = `${response.status} ${response.statusText}`;
+      try {
+        const body = await response.json();
+        if (body?.detail) detail = body.detail;
+      } catch {
+        // Keep the HTTP status for a non-JSON failure.
+      }
+      throw new Error(detail);
+    }
+    return response.blob();
+  },
   cutUrl: (projectId: string) => `/api/projects/${projectId}/cut`,
 };
 

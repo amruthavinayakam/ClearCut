@@ -70,9 +70,11 @@ interface Props {
   query: CaseQuery;
   onQuery: (query: CaseQuery) => void;
   onSelect: (item: ClearanceItem) => void;
+  queueWidth: number;
+  onQueueWidth: (width: number) => void;
 }
 
-export default function CaseRail({ items, selectedId, query, onQuery, onSelect }: Props) {
+export default function CaseRail({ items, selectedId, query, onQuery, onSelect, queueWidth, onQueueWidth }: Props) {
   const list = useRef<HTMLDivElement>(null);
   const visible = useMemo(
     () => rankCases(items).filter((item) => matchesFilter(item, query.filter) && matchesSearch(item, query.search)),
@@ -90,6 +92,7 @@ export default function CaseRail({ items, selectedId, query, onQuery, onSelect }
       <label className="case-search">
         <span className="sr-only">Search clearance cases</span>
         <input
+          id="case-search"
           type="search"
           value={query.search}
           placeholder="Search cases"
@@ -143,6 +146,10 @@ export default function CaseRail({ items, selectedId, query, onQuery, onSelect }
         ))}
         {visible.length === 0 && <p>No cases in this view.</p>}
       </div>
+      <label className="case-width">
+        <span>Queue width</span>
+        <input type="range" min="210" max="340" step="10" value={queueWidth} onChange={(event) => onQueueWidth(Number(event.target.value))} />
+      </label>
     </aside>
   );
 }

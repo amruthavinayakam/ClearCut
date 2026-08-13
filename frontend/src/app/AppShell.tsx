@@ -1,6 +1,7 @@
 import type { PropsWithChildren } from "react";
 
 import { followInternalLink } from "./router";
+import CommandPalette from "../components/CommandPalette";
 
 
 interface Props extends PropsWithChildren {
@@ -40,7 +41,10 @@ export default function AppShell({
           <span className="shell-mark" aria-hidden="true" />
           ClearCut
         </a>
-        <span>Research for human legal review</span>
+        <div className="shell-actions">
+          <span>Research for human legal review</span>
+          <CommandPalette />
+        </div>
       </header>
 
       {(configIssue || projectIndexIssue) && (

@@ -453,6 +453,26 @@ async def get_packet(project_id: str) -> PlainTextResponse:
     )
 
 
+@app.post("/api/projects/{project_id}/packet-exports")
+async def export_packet(project_id: str) -> PlainTextResponse:
+    project = await _require(project_id)
+    project.log(
+        "packet_exported",
+        actor="coordinator",
+        rationale="Current clearance research packet exported for human review.",
+        detail={"active_revision_id": project.active_revision_id},
+    )
+    project.updated_at = datetime.now(timezone.utc).isoformat()
+    await store.put(project)
+    return PlainTextResponse(
+        to_markdown(project),
+        media_type="text/markdown; charset=utf-8",
+        headers={
+            "Content-Disposition": f'attachment; filename="clearance-packet-{project_id}.md"'
+        },
+    )
+
+
 # --------------------------------------------------------------------------
 # Revision snapshots
 # --------------------------------------------------------------------------

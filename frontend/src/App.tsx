@@ -8,6 +8,7 @@ import AnalysisWorkspace from "./features/analysis/AnalysisWorkspace";
 import NewProject from "./features/projects/NewProject";
 import ProjectLibrary from "./features/projects/ProjectLibrary";
 import ReviewWorkspace from "./features/review/ReviewWorkspace";
+import PacketPreview from "./features/export/PacketPreview";
 import NewRevision from "./features/revisions/NewRevision";
 import RevisionCompare from "./features/revisions/RevisionCompare";
 import type { MonitorRecord, Project } from "./types";
@@ -212,14 +213,7 @@ export default function App() {
       content = <RevisionCompare projectId={route.projectId} revisionId={route.revisionId} />;
       break;
     case "packet":
-      content = (
-        <section className="route-state">
-          <p className="eyebrow">Project workspace</p>
-          <h1>This workspace is being prepared.</h1>
-          <p>The route is stable; its complete working surface arrives in the next product slice.</p>
-          <RouteLink href={`/projects/${route.projectId}`}>Return to project</RouteLink>
-        </section>
-      );
+      content = <PacketPreview projectId={route.projectId} />;
       break;
     default:
       content = (

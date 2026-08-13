@@ -547,6 +547,11 @@ class Project(BaseModel):
             by_category[item.category] = by_category.get(item.category, 0) + 1
 
         unscripted = sum(1 for i in self.items if i.provenance == "cut_only")
+        all_audit_events = [*self.audit_events, *(event for item in self.items for event in item.audit_events)]
+        ai_issued_approvals = sum(
+            event.actor in {"agent", "system"} and event.to_status in HUMAN_OWNED_STATUSES
+            for event in all_audit_events
+        )
         return {
             "colors": colors,
             "by_category": by_category,
@@ -558,8 +563,9 @@ class Project(BaseModel):
                 kind: sum(1 for f in self.reconciliation if f.kind == kind)
                 for kind in ("in_both", "script_only", "cut_only", "materially_changed", "approval_stale")
             },
-            # Stated as a headline number because it is the product's core claim.
-            "ai_issued_approvals": 0,
+            # Measured rather than asserted. The transition guard keeps this at
+            # zero; legacy/corrupt data would be surfaced instead of hidden.
+            "ai_issued_approvals": ai_issued_approvals,
         }
 
 

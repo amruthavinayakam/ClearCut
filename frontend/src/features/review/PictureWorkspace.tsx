@@ -10,10 +10,13 @@ interface Props {
   selectedId: string | null;
   seekTime: number | null;
   onSelect: (item: ClearanceItem) => void;
+  initialPosition?: number;
+  onPosition?: (position: number) => void;
 }
 
-export default function PictureWorkspace({ project, selectedId, seekTime, onSelect }: Props) {
+export default function PictureWorkspace({ project, selectedId, seekTime, onSelect, initialPosition = 0, onPosition }: Props) {
   const video = useRef<HTMLVideoElement>(null);
+  const lastPosition = useRef(-1);
   const duration = project.cut?.duration_s ?? 0;
 
   useEffect(() => {
@@ -24,7 +27,22 @@ export default function PictureWorkspace({ project, selectedId, seekTime, onSele
   return (
     <section className="picture-workspace" aria-label="Picture and clearance timeline">
       {project.cut ? (
-        <video ref={video} src={api.cutUrl(project.id)} controls preload="metadata" />
+        <video
+          ref={video}
+          src={api.cutUrl(project.id)}
+          controls
+          preload="metadata"
+          onLoadedMetadata={() => {
+            if (video.current && seekTime === null) video.current.currentTime = Math.min(initialPosition, video.current.duration || initialPosition);
+          }}
+          onTimeUpdate={() => {
+            if (!video.current || !onPosition) return;
+            const second = Math.floor(video.current.currentTime);
+            if (second === lastPosition.current) return;
+            lastPosition.current = second;
+            onPosition(video.current.currentTime);
+          }}
+        />
       ) : (
         <div className="picture-workspace__script">
           <p className="eyebrow">{project.script?.label ?? "Screenplay"}</p>

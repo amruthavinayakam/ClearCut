@@ -1,11 +1,44 @@
-interface ProjectPreferences {
+export interface ProjectPreferences {
   seenReveals: string[];
+  selectedItemId: string | null;
+  caseFilter: "all" | "unscripted" | "unresolved" | "incomplete" | "verified" | "documented" | "reopened";
+  caseSearch: string;
+  queueWidth: number;
+  drawer: "activity" | "copilot" | null;
+  videoPosition: number;
 }
 
+const DEFAULTS: ProjectPreferences = {
+  seenReveals: [],
+  selectedItemId: null,
+  caseFilter: "all",
+  caseSearch: "",
+  queueWidth: 250,
+  drawer: null,
+  videoPosition: 0,
+};
+
+const FILTERS = new Set<ProjectPreferences["caseFilter"]>([
+  "all", "unscripted", "unresolved", "incomplete", "verified", "documented", "reopened",
+]);
 const memory = new Map<string, ProjectPreferences>();
 
 function key(projectId: string): string {
   return `clearcut:project:${projectId}:preferences`;
+}
+
+function safePreferences(value: Partial<ProjectPreferences>): ProjectPreferences {
+  return {
+    seenReveals: Array.isArray(value.seenReveals) ? value.seenReveals.filter((item): item is string => typeof item === "string") : [],
+    selectedItemId: typeof value.selectedItemId === "string" ? value.selectedItemId : null,
+    caseFilter: FILTERS.has(value.caseFilter as ProjectPreferences["caseFilter"])
+      ? value.caseFilter as ProjectPreferences["caseFilter"]
+      : "all",
+    caseSearch: typeof value.caseSearch === "string" ? value.caseSearch.slice(0, 120) : "",
+    queueWidth: typeof value.queueWidth === "number" ? Math.min(340, Math.max(210, value.queueWidth)) : 250,
+    drawer: value.drawer === "activity" || value.drawer === "copilot" ? value.drawer : null,
+    videoPosition: typeof value.videoPosition === "number" && value.videoPosition >= 0 ? value.videoPosition : 0,
+  };
 }
 
 function read(projectId: string): ProjectPreferences {
@@ -14,8 +47,7 @@ function read(projectId: string): ProjectPreferences {
   try {
     const raw = window.localStorage.getItem(key(projectId));
     if (raw) {
-      const parsed = JSON.parse(raw) as ProjectPreferences;
-      const safe = { seenReveals: Array.isArray(parsed.seenReveals) ? parsed.seenReveals : [] };
+      const safe = safePreferences(JSON.parse(raw) as Partial<ProjectPreferences>);
       memory.set(projectId, safe);
       return safe;
     }
@@ -23,7 +55,7 @@ function read(projectId: string): ProjectPreferences {
     // Privacy mode can make localStorage unavailable. In-memory continuity is
     // still preferable to making the product fail to render.
   }
-  return { seenReveals: [] };
+  return { ...DEFAULTS };
 }
 
 function write(projectId: string, preferences: ProjectPreferences): void {
@@ -33,6 +65,19 @@ function write(projectId: string, preferences: ProjectPreferences): void {
   } catch {
     // The in-memory copy remains authoritative for this visit.
   }
+}
+
+export function getProjectPreferences(projectId: string): ProjectPreferences {
+  return { ...read(projectId), seenReveals: [...read(projectId).seenReveals] };
+}
+
+export function updateProjectPreferences(
+  projectId: string,
+  changes: Partial<ProjectPreferences>,
+): ProjectPreferences {
+  const next = safePreferences({ ...read(projectId), ...changes });
+  write(projectId, next);
+  return next;
 }
 
 export function hasSeenReveal(projectId: string, revisionKey: string): boolean {
