@@ -10,6 +10,7 @@ export function openProjectStream(
   onFrame: (frame: StreamFrame) => void,
   onDisconnect: () => void,
 ): ProjectStream {
+  if (typeof EventSource === "undefined") return { close: () => undefined };
   const source = new EventSource(`/api/projects/${encodeURIComponent(projectId)}/stream`);
   let disconnected = false;
 

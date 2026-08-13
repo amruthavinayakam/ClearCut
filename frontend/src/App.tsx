@@ -4,10 +4,10 @@ import { api } from "./api/client";
 import AppShell, { BootScreen } from "./app/AppShell";
 import { bootstrap, type BootResult, type Resource } from "./app/bootstrap";
 import { followInternalLink, navigate, useRoute } from "./app/router";
-import Workspace from "./components/Workspace";
 import AnalysisWorkspace from "./features/analysis/AnalysisWorkspace";
 import NewProject from "./features/projects/NewProject";
 import ProjectLibrary from "./features/projects/ProjectLibrary";
+import ReviewWorkspace from "./features/review/ReviewWorkspace";
 import type { MonitorRecord, Project } from "./types";
 
 
@@ -72,14 +72,11 @@ function ProjectRoute({ projectId }: { projectId: string }) {
 
   if (project.phase === "ready" || reviewRequested) {
     return (
-      <main className="main legacy-workspace">
-        <Workspace
-          project={project}
-          monitors={monitors}
-          onRefresh={() => void refresh()}
-          onReset={() => navigate("/")}
-        />
-      </main>
+      <ReviewWorkspace
+        initialProject={project}
+        monitors={monitors}
+        onRefresh={() => void refresh()}
+      />
     );
   }
 
