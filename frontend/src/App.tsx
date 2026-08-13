@@ -1,293 +1,307 @@
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 
-import { api, streamProject } from "./api";
+import { api, streamProject } from "./api/client";
+import AppShell, { BootScreen } from "./app/AppShell";
+import { bootstrap, type BootResult, type Resource } from "./app/bootstrap";
+import { followInternalLink, navigate, useRoute } from "./app/router";
+import StatusMark from "./components/StatusMark";
 import Upload from "./components/Upload";
 import Workspace from "./components/Workspace";
-import type { AppConfig, MonitorRecord, Project, ProjectPhase } from "./types";
+import ProjectLibrary from "./features/projects/ProjectLibrary";
+import type { AppConfig, MonitorRecord, Project } from "./types";
 
-interface LogLine {
-  at: string;
-  message: string;
-  kind?: "search";
+
+function message(resource: Resource<unknown> | undefined): string | undefined {
+  return resource?.status === "error" ? resource.error.message : undefined;
 }
 
-const STAGES: { key: ProjectPhase; label: string }[] = [
-  { key: "scanning_script", label: "script" },
-  { key: "scanning_cut", label: "cut" },
-  { key: "reconciling", label: "reconcile" },
-  { key: "researching", label: "research" },
-  { key: "ready", label: "review" },
-];
+function RouteLink({ href, children }: { href: string; children: React.ReactNode }) {
+  return (
+    <a href={href} onClick={(event) => followInternalLink(event, href)}>
+      {children}
+    </a>
+  );
+}
 
-const ORDER: ProjectPhase[] = [
-  "created",
-  "scanning_script",
-  "scanning_cut",
-  "reconciling",
-  "researching",
-  "ready",
-];
-
-export default function App() {
-  const [config, setConfig] = useState<AppConfig | null>(null);
+function ProjectRoute({ projectId }: { projectId: string }) {
   const [project, setProject] = useState<Project | null>(null);
-  const [lines, setLines] = useState<LogLine[]>([]);
   const [monitors, setMonitors] = useState<MonitorRecord[]>([]);
-  const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const closeStream = useRef<(() => void) | null>(null);
-  const logRef = useRef<HTMLDivElement>(null);
 
-  useEffect(() => {
-    api.config().then(setConfig).catch(() => setConfig(null));
-    return () => closeStream.current?.();
-  }, []);
-
-  // A scan can outlive a page reload, and coordinators share links to a
-  // project. The id lives in the hash so both work without a router.
-  useEffect(() => {
-    const id = window.location.hash.replace(/^#/, "").trim();
-    if (!id.startsWith("proj_")) return;
-    void (async () => {
-      try {
-        const existing = await api.getProject(id);
-        setProject(existing);
-        void refresh(id);
-        if (existing.phase !== "ready" && existing.phase !== "failed") attach(existing);
-      } catch {
-        window.location.hash = "";
-      }
-    })();
-    // Deliberately mount-only: re-running on `attach` identity would reload
-    // the project on every render.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
-
-  useEffect(() => {
-    logRef.current?.scrollTo({ top: logRef.current.scrollHeight, behavior: "smooth" });
-  }, [lines.length]);
-
-  const refresh = useCallback(async (projectId: string) => {
+  const refresh = useCallback(async () => {
     try {
-      const [fresh, { monitors: list }] = await Promise.all([
+      const [fresh, monitorResponse] = await Promise.all([
         api.getProject(projectId),
-        api.listMonitors(projectId).catch(() => ({ monitors: [] as MonitorRecord[] })),
+        api.listMonitors(projectId).catch(() => ({ monitors: [] })),
       ]);
       setProject(fresh);
-      setMonitors(list);
-    } catch (exc) {
-      setError((exc as Error).message);
+      setMonitors(monitorResponse.monitors);
+      setError(null);
+      return fresh;
+    } catch (reason) {
+      setError((reason as Error).message);
+      return null;
     }
-  }, []);
+  }, [projectId]);
 
-  const note = useCallback((message: string, kind?: "search") => {
-    setLines((prev) => [...prev, { at: new Date().toISOString(), message, kind }]);
-  }, []);
-
-  const attach = useCallback(
-    (started: Project) => {
-      setProject(started);
-      setLines([]);
-      setMonitors([]);
-      window.location.hash = started.id;
-      closeStream.current?.();
-
-      closeStream.current = streamProject(started.id, (frame) => {
-        switch (frame.type) {
-          case "snapshot":
-            setProject(frame.project);
-            break;
-          case "progress":
-            note(frame.message);
-            setProject((prev) => (prev ? { ...prev, phase: frame.phase as ProjectPhase } : prev));
-            break;
-          case "search_results":
-            // Live Parallel Search, surfaced as it happens.
-            note(
-              `Parallel Search — ${frame.item_name}: ${frame.sources.length} source(s)`,
-              "search",
-            );
-            for (const source of frame.sources.slice(0, 3)) {
-              note(`    ${source.title || source.url}`, "search");
-            }
-            break;
-          case "search_failed":
-            note(`Search failed: ${frame.message}`);
-            break;
-          case "item_researched":
-            note(
-              `${frame.item_name} — ${frame.status} (${frame.citations} sources, ${frame.holders} candidate holder(s))`,
-            );
-            break;
-          case "monitor_event":
-            note(`Monitor update for ${frame.item_name} — item reopened`);
-            void refresh(started.id);
-            break;
-          case "done":
-            void refresh(started.id);
-            break;
-          case "error":
-            setError(frame.message);
-            break;
-          default:
-            break;
+  useEffect(() => {
+    let active = true;
+    let close: () => void = () => undefined;
+    void refresh().then((loaded) => {
+      if (!active || !loaded || loaded.phase === "ready" || loaded.phase === "failed") return;
+      close = streamProject(projectId, (frame) => {
+        if (!active) return;
+        if (frame.type === "snapshot") setProject(frame.project);
+        if (frame.type === "progress") {
+          setProject((current) =>
+            current ? { ...current, phase: frame.phase as Project["phase"] } : current,
+          );
         }
+        if (frame.type === "done" || frame.type === "monitor_event") void refresh();
+        if (frame.type === "error") setError(frame.message);
       });
-    },
-    [note, refresh],
-  );
+    });
+    return () => {
+      active = false;
+      close();
+    };
+  }, [projectId, refresh]);
 
-  async function launch(run: () => Promise<Project>) {
+  if (error && !project) {
+    const missing = error.startsWith("Project not found") || error.startsWith("404");
+    return (
+      <section className="route-state">
+        <p className="eyebrow">{missing ? "Project not found" : "Project unavailable"}</p>
+        <h1>{missing ? "This project is no longer in the index." : "The project could not open."}</h1>
+        <p>{error}</p>
+        <RouteLink href="/">Back to projects</RouteLink>
+      </section>
+    );
+  }
+
+  if (!project) {
+    return (
+      <section className="route-state" aria-busy="true">
+        <p className="eyebrow">Opening project</p>
+        <h1>Reading the production record.</h1>
+      </section>
+    );
+  }
+
+  if (project.phase === "ready") {
+    return (
+      <main className="main legacy-workspace">
+        <Workspace
+          project={project}
+          monitors={monitors}
+          onRefresh={() => void refresh()}
+          onReset={() => navigate("/")}
+        />
+      </main>
+    );
+  }
+
+  if (project.phase === "failed") {
+    return (
+      <section className="route-state">
+        <p className="eyebrow">Analysis stopped</p>
+        <h1>{project.title}</h1>
+        <p>{project.error ?? "The analysis did not complete."}</p>
+        <button className="button button--quiet" type="button" onClick={() => void refresh()}>
+          Refresh project
+        </button>
+      </section>
+    );
+  }
+
+  const phase = project.phase.replace(/_/g, " ");
+  return (
+    <section className="route-state analysis-bridge" aria-live="polite">
+      <p className="eyebrow">Clearance analysis</p>
+      <h1>{project.title}</h1>
+      <StatusMark label={phase} tone="amber" />
+      <p>
+        ClearCut is reading the available production material. Completed evidence remains
+        available as each stage settles.
+      </p>
+      <ol className="analysis-sequence">
+        <li>Read script</li>
+        <li>Scan cut</li>
+        <li>Reconcile versions</li>
+        <li>Research rights</li>
+        <li>Human review</li>
+      </ol>
+      {error && <p role="alert">{error}</p>}
+    </section>
+  );
+}
+
+function NewProjectRoute({ config }: { config: AppConfig | null }) {
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  async function launch(script: File | null, cut: File | null, title: string) {
     setBusy(true);
     setError(null);
     try {
-      attach(await run());
-    } catch (exc) {
-      setError((exc as Error).message);
+      const project = await api.createProject(script, cut, title);
+      navigate(`/projects/${project.id}`);
+    } catch (reason) {
+      setError((reason as Error).message);
     } finally {
       setBusy(false);
     }
   }
 
-  function reset() {
-    closeStream.current?.();
-    closeStream.current = null;
-    window.location.hash = "";
-    setProject(null);
-    setLines([]);
-    setMonitors([]);
-    setError(null);
+  return (
+    <main className="temporary-route">
+      <p className="eyebrow">New clearance scan</p>
+      <h1>Bring the page and the screen together.</h1>
+      <Upload
+        busy={busy}
+        sampleAvailable={false}
+        onSubmit={(script, cut, title) => void launch(script, cut, title)}
+        onSample={() => undefined}
+      />
+      {!config?.parallel_configured && (
+        <p>Research configuration is not available. Intake remains visible for diagnosis.</p>
+      )}
+      {error && <p role="alert">{error}</p>}
+    </main>
+  );
+}
+
+export default function App() {
+  const route = useRoute();
+  const [boot, setBoot] = useState<BootResult | null>(null);
+  const [delayed, setDelayed] = useState(false);
+
+  useEffect(() => {
+    let active = true;
+    const timer = window.setTimeout(() => setDelayed(true), 350);
+    void bootstrap().then((result) => {
+      if (!active) return;
+      window.clearTimeout(timer);
+      setBoot(result);
+    });
+    return () => {
+      active = false;
+      window.clearTimeout(timer);
+    };
+  }, []);
+
+  const config = boot?.config.status === "ready" ? boot.config.data : null;
+  const projects = useMemo(
+    () => (boot?.projects.status === "ready" ? boot.projects.data : []),
+    [boot],
+  );
+
+  const refreshProjects = useCallback(async () => {
+    try {
+      const response = await api.listProjects(true);
+      setBoot((current) =>
+        current ? { ...current, projects: { status: "ready", data: response.projects } } : current,
+      );
+    } catch (error) {
+      setBoot((current) =>
+        current ? { ...current, projects: { status: "error", error: error as Error } } : current,
+      );
+    }
+  }, []);
+
+  const retryConfig = useCallback(async () => {
+    try {
+      const data = await api.config();
+      setBoot((current) =>
+        current ? { ...current, config: { status: "ready", data } } : current,
+      );
+    } catch (error) {
+      setBoot((current) =>
+        current ? { ...current, config: { status: "error", error: error as Error } } : current,
+      );
+    }
+  }, []);
+
+  if (!boot) return <BootScreen delayed={delayed} />;
+
+  const archivedView = new URLSearchParams(window.location.search).get("view") === "archived";
+  const libraryProjects = projects.filter((project) =>
+    archivedView ? project.archived_at !== null : project.archived_at === null,
+  );
+
+  async function archive(projectId: string, archived: boolean) {
+    try {
+      await api.setArchived(projectId, archived);
+      await refreshProjects();
+    } catch (error) {
+      setBoot((current) =>
+        current
+          ? { ...current, projects: { status: "error", error: error as Error } }
+          : current,
+      );
+    }
   }
 
-  const hasItems = Boolean(project && project.items.length > 0);
-  const running = Boolean(project && project.phase !== "ready" && project.phase !== "failed");
-  const currentIndex = project ? ORDER.indexOf(project.phase) : -1;
+  async function openExample() {
+    try {
+      const project = await api.runSample();
+      navigate(`/projects/${project.id}`);
+    } catch (error) {
+      setBoot((current) =>
+        current ? { ...current, config: { status: "error", error: error as Error } } : current,
+      );
+    }
+  }
+
+  let content: React.ReactNode;
+  switch (route.name) {
+    case "projects":
+      content = (
+        <ProjectLibrary
+          projects={libraryProjects}
+          archived={archivedView}
+          sampleAvailable={config?.sample_available ?? false}
+          onOpenExample={() => void openExample()}
+          onArchive={(projectId, archived) => void archive(projectId, archived)}
+        />
+      );
+      break;
+    case "new-project":
+      content = <NewProjectRoute config={config} />;
+      break;
+    case "project":
+      content = <ProjectRoute projectId={route.projectId} />;
+      break;
+    case "new-revision":
+    case "revision":
+    case "packet":
+      content = (
+        <section className="route-state">
+          <p className="eyebrow">Project workspace</p>
+          <h1>This workspace is being prepared.</h1>
+          <p>The route is stable; its complete working surface arrives in the next product slice.</p>
+          <RouteLink href={`/projects/${route.projectId}`}>Return to project</RouteLink>
+        </section>
+      );
+      break;
+    default:
+      content = (
+        <section className="route-state">
+          <p className="eyebrow">Not found</p>
+          <h1>There is no ClearCut view at this address.</h1>
+          <RouteLink href="/">Back to projects</RouteLink>
+        </section>
+      );
+  }
 
   return (
-    <div className="app">
-      <header className="topbar">
-        <div className="brand">
-          <span>◎</span>
-          Clearance Radar
-          <span className="tagline">every frame · every right · every change</span>
-        </div>
-        <div className="spacer" />
-        <div className="chips">
-          {config?.mock_research && <span className="chip warn">mock research</span>}
-          {config?.vertex && (
-            <span className="chip">vertex ai{config.project ? ` · ${config.project}` : ""}</span>
-          )}
-          {config?.parallel_configured && !config.mock_research && (
-            <span className="chip ok">
-              parallel · search {config.search_mode} · task {config.processor}
-            </span>
-          )}
-        </div>
-      </header>
-
-      <main className="main">
-        {!project && (
-          <>
-            <div className="hero">
-              <h1>
-                The script was cleared.
-                <br />
-                <em>Then the cut arrived.</em>
-              </h1>
-              <p>
-                Clearance Radar compares the page against the screen, pins every unresolved
-                element to its exact frame, researches who controls it with citations, and
-                keeps watching for public changes. Humans make every legal decision.
-              </p>
-              <div className="pipeline-strip">
-                <span className="step">gemini reads the script</span>
-                <span className="arrow">→</span>
-                <span className="step">gemini watches the cut</span>
-                <span className="arrow">→</span>
-                <span className="step">reconcile</span>
-                <span className="arrow">→</span>
-                <span className="step">parallel search + task</span>
-                <span className="arrow">→</span>
-                <span className="step">human sign-off</span>
-                <span className="arrow">→</span>
-                <span className="step">parallel monitor</span>
-              </div>
-            </div>
-
-            <Upload
-              busy={busy}
-              sampleAvailable={config?.sample_available ?? false}
-              onSubmit={(script, cut, title) =>
-                launch(() => api.createProject(script, cut, title))
-              }
-              onSample={() => launch(() => api.runSample())}
-            />
-
-            {error && (
-              <div className="upload-card">
-                <div className="error-banner">{error}</div>
-              </div>
-            )}
-          </>
-        )}
-
-        {project && running && (
-          <div className="card progress-panel">
-            <div className="progress-head">
-              <div className="spinner" />
-              <div>
-                <strong style={{ fontSize: 15.5 }}>Scanning {project.title}</strong>
-                <div style={{ color: "var(--text-dim)", fontSize: 13 }}>
-                  Gemini reads the script and the cut, then Parallel researches each item.
-                </div>
-              </div>
-            </div>
-
-            <div className="stages">
-              {STAGES.map((stage) => {
-                const index = ORDER.indexOf(stage.key);
-                const state = currentIndex > index ? "done" : currentIndex === index ? "active" : "";
-                return (
-                  <div key={stage.key} className={`stage ${state}`}>
-                    {stage.label}
-                  </div>
-                );
-              })}
-            </div>
-
-            <div className="log" ref={logRef}>
-              {lines.map((line, index) => (
-                <div className={`log-line${line.kind ? ` ${line.kind}` : ""}`} key={index}>
-                  <span className="ts">{new Date(line.at).toLocaleTimeString()}</span>
-                  <span>{line.message}</span>
-                </div>
-              ))}
-            </div>
-
-            {(error || project.error) && (
-              <>
-                <div className="error-banner">{error ?? project.error}</div>
-                <div className="row center" style={{ marginTop: 12 }}>
-                  <button className="btn" onClick={reset}>
-                    Start over
-                  </button>
-                </div>
-              </>
-            )}
-          </div>
-        )}
-
-        {project && hasItems && (
-          <div style={{ marginTop: running ? 20 : 0 }}>
-            <Workspace
-              project={project}
-              monitors={monitors}
-              onRefresh={() => void refresh(project.id)}
-              onReset={reset}
-            />
-          </div>
-        )}
-      </main>
-    </div>
+    <AppShell
+      configIssue={message(boot.config)}
+      projectIndexIssue={message(boot.projects)}
+      onRetryConfig={() => void retryConfig()}
+      onRetryProjects={() => void refreshProjects()}
+    >
+      {content}
+    </AppShell>
   );
 }

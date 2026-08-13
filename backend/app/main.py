@@ -5,6 +5,7 @@ from __future__ import annotations
 import asyncio
 import json
 import logging
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Optional
 
@@ -202,9 +203,26 @@ async def create_sample_project() -> dict[str, Any]:
     return _payload(project)
 
 
+def _project_state(project: Project) -> str:
+    if project.phase == "failed":
+        return "Failed"
+    if project.phase != "ready":
+        return "Processing"
+    if any(item.workflow_status.startswith("reopened_by_") for item in project.items):
+        return "Reopened"
+    if project.items and all(item.is_resolved for item in project.items):
+        return "Documented"
+    if project.items and all(
+        item.is_resolved or item.workflow_status == "coordinator_verified"
+        for item in project.items
+    ):
+        return "Ready for counsel"
+    return "Needs review"
+
+
 @app.get("/api/projects")
-async def list_projects() -> dict[str, Any]:
-    projects = await store.list_projects()
+async def list_projects(include_archived: bool = False) -> dict[str, Any]:
+    projects = await store.list_projects(include_archived=include_archived)
     return {
         "projects": [
             {
@@ -212,7 +230,13 @@ async def list_projects() -> dict[str, Any]:
                 "title": p.title,
                 "phase": p.phase,
                 "created_at": p.created_at,
-                "summary": p.summary(),
+                "updated_at": p.updated_at,
+                "script_label": p.script.label if p.script else None,
+                "cut_label": p.cut.label if p.cut else None,
+                "unresolved_count": len(p.items) - sum(1 for item in p.items if item.is_resolved),
+                "total_items": len(p.items),
+                "state_label": _project_state(p),
+                "archived_at": p.archived_at,
             }
             for p in projects
         ]
@@ -229,6 +253,27 @@ async def _require(project_id: str) -> Project:
 @app.get("/api/projects/{project_id}")
 async def get_project(project_id: str) -> dict[str, Any]:
     return _payload(await _require(project_id))
+
+
+class ProjectArchiveChange(BaseModel):
+    archived: bool
+
+
+@app.patch("/api/projects/{project_id}")
+async def update_project(project_id: str, body: ProjectArchiveChange) -> dict[str, Any]:
+    project = await _require(project_id)
+    now = datetime.now(timezone.utc).isoformat()
+    project.archived_at = now if body.archived else None
+    project.updated_at = now
+    project.log(
+        "project_archived" if body.archived else "project_restored",
+        actor="coordinator",
+        rationale="Project moved out of the active library."
+        if body.archived
+        else "Project restored to the active library.",
+    )
+    await store.put(project)
+    return _payload(project)
 
 
 @app.get("/api/projects/{project_id}/packet.md")

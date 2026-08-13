@@ -1,0 +1,21 @@
+:root {
+  color-scheme: dark;
+  --canvas: #0b090a;
+  --surface: #110e10;
+  --surface-strong: #171214;
+  --bone: #f1e8da;
+  --muted: #968c84;
+  --line: rgba(241, 232, 218, 0.12);
+  --amber: #d99a52;
+  --oxblood: #7c273b;
+  --risk: #cc4d5c;
+  --verified: #6686a0;
+  --documented: #66876f;
+  --dismissed: #706a67;
+  --font-ui: "Manrope Variable", ui-sans-serif, system-ui, sans-serif;
+  --font-signal: "Newsreader Variable", Georgia, serif;
+  --font-mono: ui-monospace, "SFMono-Regular", Consolas, monospace;
+  --ease-out: cubic-bezier(0.16, 1, 0.3, 1);
+  --radius-sm: 4px;
+  --radius-md: 8px;
+}

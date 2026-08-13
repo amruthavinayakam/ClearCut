@@ -159,15 +159,55 @@ export interface ProjectSummary {
   ai_issued_approvals: number;
 }
 
+export type ProjectStateLabel =
+  | "Processing"
+  | "Needs review"
+  | "Ready for counsel"
+  | "Documented"
+  | "Reopened"
+  | "Failed";
+
+export interface ProjectListItem {
+  id: string;
+  title: string;
+  phase: ProjectPhase;
+  created_at: string;
+  updated_at: string;
+  script_label: string | null;
+  cut_label: string | null;
+  unresolved_count: number;
+  total_items: number;
+  state_label: ProjectStateLabel;
+  archived_at: string | null;
+}
+
 export interface Project {
   id: string;
   title: string;
   created_at: string;
   updated_at: string;
+  archived_at: string | null;
   phase: ProjectPhase;
   error: string | null;
-  script: { label: string; filename: string; title: string; page_count: number; scene_count: number } | null;
-  cut: { label: string; filename: string; duration_s: number; media_url: string } | null;
+  script: {
+    label: string;
+    filename: string;
+    title: string;
+    page_count: number;
+    scene_count: number;
+    storage_key: string;
+    mime_type: string;
+    size_bytes: number;
+  } | null;
+  cut: {
+    label: string;
+    filename: string;
+    duration_s: number;
+    media_url: string;
+    storage_key: string;
+    mime_type: string;
+    size_bytes: number;
+  } | null;
   items: ClearanceItem[];
   reconciliation: ReconciliationFinding[];
   audit_events: AuditEvent[];

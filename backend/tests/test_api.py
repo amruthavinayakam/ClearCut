@@ -105,3 +105,30 @@ def test_cut_streaming_uses_persisted_asset_metadata(
     assert response.content == b"2345"
     assert response.headers["content-range"] == "bytes 2-5/10"
     assert not hasattr(main_module, "_CUT_PATHS")
+
+
+def test_archive_is_reversible_and_excluded_from_the_active_library(
+    client: TestClient,
+) -> None:
+    project = Project(title=f"Archive test {uuid.uuid4().hex[:6]}")
+    asyncio.run(store.put(project))
+
+    archived = client.patch(f"/api/projects/{project.id}", json={"archived": True})
+    active_ids = {row["id"] for row in client.get("/api/projects").json()["projects"]}
+    archived_ids = {
+        row["id"]
+        for row in client.get("/api/projects?include_archived=true").json()["projects"]
+    }
+    restored = client.patch(f"/api/projects/{project.id}", json={"archived": False})
+
+    assert archived.status_code == 200
+    assert archived.json()["archived_at"] is not None
+    assert project.id not in active_ids
+    assert project.id in archived_ids
+    assert restored.status_code == 200
+    assert restored.json()["archived_at"] is None
+    refreshed = client.get(f"/api/projects/{project.id}").json()
+    assert [event["action"] for event in refreshed["audit_events"]][-2:] == [
+        "project_archived",
+        "project_restored",
+    ]

@@ -443,6 +443,7 @@ class Project(BaseModel):
     title: str = "Untitled production"
     created_at: str = Field(default_factory=_now)
     updated_at: str = Field(default_factory=_now)
+    archived_at: Optional[str] = None
     phase: ProjectPhase = "created"
     error: Optional[str] = None
 

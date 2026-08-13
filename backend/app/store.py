@@ -73,10 +73,34 @@ class ProjectStore:
             self._projects[project_id] = project
         return project
 
-    async def list_projects(self, limit: int = 25) -> list[Project]:
+    async def list_projects(
+        self, limit: int = 25, *, include_archived: bool = False
+    ) -> list[Project]:
         async with self._lock:
             projects = list(self._projects.values())
+        if self._firestore is not None:
+            settings = get_settings()
+            try:
+                from google.cloud import firestore
+
+                query = (
+                    self._firestore.collection(settings.firestore_collection)
+                    .order_by("updated_at", direction=firestore.Query.DESCENDING)
+                    .limit(max(100, limit * 4))
+                )
+                snapshots = await query.get()
+                persisted = [Project.model_validate(snapshot.to_dict()) for snapshot in snapshots]
+                by_id = {project.id: project for project in persisted}
+                by_id.update({project.id: project for project in projects})
+                projects = list(by_id.values())
+                async with self._lock:
+                    self._projects.update({project.id: project for project in persisted})
+            except Exception:  # noqa: BLE001 - retain the usable local index
+                logger.exception("Firestore project listing failed; using in-memory index")
+        if not include_archived:
+            projects = [project for project in projects if project.archived_at is None]
         projects.sort(key=lambda p: p.created_at, reverse=True)
+        projects.sort(key=lambda p: p.updated_at, reverse=True)
         return projects[:limit]
 
     # -- monitors -----------------------------------------------------------
