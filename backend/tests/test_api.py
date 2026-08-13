@@ -132,3 +132,59 @@ def test_archive_is_reversible_and_excluded_from_the_active_library(
         "project_archived",
         "project_restored",
     ]
+
+
+def test_screenplay_preflight_reports_readable_text(client: TestClient) -> None:
+    screenplay = b"Title: Night Drive\n\nINT. CAR - NIGHT\nA radio plays under the dialogue."
+
+    response = client.post(
+        "/api/uploads/preflight",
+        files={"file": ("film.fountain", screenplay, "text/plain")},
+    )
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["kind"] == "screenplay"
+    assert payload["accepted"] is True
+    assert payload["details"]["scene_count"] >= 1
+    assert payload["details"]["readable_text"] is True
+
+
+def test_preflight_returns_explicit_error_codes(
+    client: TestClient, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    unsupported = client.post(
+        "/api/uploads/preflight",
+        files={"file": ("rights.exe", b"binary", "application/octet-stream")},
+    )
+    unreadable = client.post(
+        "/api/uploads/preflight",
+        files={"file": ("broken.pdf", b"%PDF-not-a-container", "application/pdf")},
+    )
+    no_text = client.post(
+        "/api/uploads/preflight",
+        files={"file": ("empty.txt", b"  \n", "text/plain")},
+    )
+    monkeypatch.setattr(main_module.settings, "max_upload_bytes", 4)
+    too_large = client.post(
+        "/api/uploads/preflight",
+        files={"file": ("long.txt", b"12345", "text/plain")},
+    )
+
+    assert unsupported.status_code == 200
+    assert unsupported.json()["errors"][0]["code"] == "unsupported_type"
+    assert unreadable.status_code == 200
+    assert unreadable.json()["errors"][0]["code"] == "unreadable_container"
+    assert no_text.json()["errors"][0]["code"] == "no_text_layer"
+    assert too_large.json()["errors"][0]["code"] == "too_large"
+
+
+def test_project_creation_reuses_preflight_type_rules(client: TestClient) -> None:
+    response = client.post(
+        "/api/projects",
+        files={"script": ("malware.exe", b"not a screenplay", "application/octet-stream")},
+        data={"title": "Unsafe intake"},
+    )
+
+    assert response.status_code == 400
+    assert "unsupported_type" in response.json()["detail"]

@@ -5,6 +5,7 @@ from __future__ import annotations
 import asyncio
 import json
 import logging
+import tempfile
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Optional
@@ -20,7 +21,12 @@ from .config import get_settings
 from .export import to_markdown
 from .models import Actor, ApprovalDenied, Project, ProductionDocument, WorkflowStatus
 from .pipeline import start_project
-from .screenplay import ScreenplayParseError
+from .screenplay import (
+    NoTextLayerError,
+    ScreenplayParseError,
+    UnreadableScreenplayError,
+    parse_screenplay,
+)
 from .store import store
 
 logging.basicConfig(
@@ -134,6 +140,134 @@ async def _read_upload(upload: UploadFile, label: str) -> bytes:
     return data
 
 
+SCRIPT_SUFFIXES = {".pdf", ".txt", ".fountain", ".fdx", ".md"}
+VIDEO_SUFFIXES = {".mp4", ".mov", ".m4v", ".webm"}
+
+
+class PreflightError(BaseModel):
+    code: str
+    message: str
+
+
+class PreflightResult(BaseModel):
+    kind: str
+    filename: str
+    mime_type: str
+    size_bytes: int
+    accepted: bool
+    details: dict[str, Any] = Field(default_factory=dict)
+    errors: list[PreflightError] = Field(default_factory=list)
+
+
+async def _preflight_bytes(
+    data: bytes, filename: str, mime_type: str
+) -> PreflightResult:
+    suffix = Path(filename).suffix.lower()
+    kind = (
+        "screenplay"
+        if suffix in SCRIPT_SUFFIXES
+        else "cut"
+        if suffix in VIDEO_SUFFIXES
+        else "unknown"
+    )
+    base = {
+        "kind": kind,
+        "filename": filename,
+        "mime_type": mime_type or "application/octet-stream",
+        "size_bytes": len(data),
+    }
+    if len(data) > settings.max_upload_bytes:
+        return PreflightResult(
+            **base,
+            accepted=False,
+            errors=[
+                PreflightError(
+                    code="too_large",
+                    message=f"File exceeds the {settings.max_upload_bytes // (1024 * 1024)} MB limit.",
+                )
+            ],
+        )
+    if kind == "unknown":
+        return PreflightResult(
+            **base,
+            accepted=False,
+            errors=[
+                PreflightError(
+                    code="unsupported_type",
+                    message="Use a supported screenplay document or video container.",
+                )
+            ],
+        )
+    if kind == "screenplay":
+        try:
+            document = parse_screenplay(data, filename)
+        except NoTextLayerError as exc:
+            return PreflightResult(
+                **base,
+                accepted=False,
+                errors=[PreflightError(code="no_text_layer", message=str(exc))],
+            )
+        except (UnreadableScreenplayError, ScreenplayParseError) as exc:
+            return PreflightResult(
+                **base,
+                accepted=False,
+                errors=[PreflightError(code="unreadable_container", message=str(exc))],
+            )
+        return PreflightResult(
+            **base,
+            accepted=True,
+            details={
+                "title": document.title,
+                "page_count": document.page_count,
+                "scene_count": len(document.scenes),
+                "readable_text": True,
+            },
+        )
+
+    with tempfile.TemporaryDirectory(prefix="clearcut-preflight-") as directory:
+        path = Path(directory) / f"asset{suffix}"
+        await asyncio.to_thread(path.write_bytes, data)
+        duration = await _probe_duration(path)
+    if duration <= 0:
+        return PreflightResult(
+            **base,
+            accepted=False,
+            errors=[
+                PreflightError(
+                    code="unreadable_container",
+                    message="The video container does not expose a readable duration.",
+                )
+            ],
+        )
+    return PreflightResult(
+        **base,
+        accepted=True,
+        details={"duration_s": duration},
+    )
+
+
+@app.post("/api/uploads/preflight")
+async def preflight_upload(file: UploadFile = File(...)) -> dict[str, Any]:
+    data = await file.read(settings.max_upload_bytes + 1)
+    result = await _preflight_bytes(
+        data,
+        file.filename or "upload",
+        file.content_type or "application/octet-stream",
+    )
+    return result.model_dump(mode="json")
+
+
+def _raise_preflight(result: PreflightResult) -> None:
+    if result.accepted:
+        return
+    error = result.errors[0]
+    status = 413 if error.code == "too_large" else 400
+    raise HTTPException(
+        status_code=status,
+        detail=f"{result.filename}: {error.code} — {error.message}",
+    )
+
+
 @app.post("/api/projects")
 async def create_project(
     script: Optional[UploadFile] = File(default=None),
@@ -142,6 +276,30 @@ async def create_project(
 ) -> dict[str, Any]:
     if script is None and cut is None:
         raise HTTPException(status_code=400, detail="Upload a screenplay, a rough cut, or both.")
+    script_asset: Optional[StoredAsset] = None
+    script_bytes: Optional[bytes] = None
+    script_result: Optional[PreflightResult] = None
+    if script is not None:
+        script_bytes = await _read_upload(script, "Screenplay")
+        script_result = await _preflight_bytes(
+            script_bytes,
+            script.filename or "screenplay.txt",
+            script.content_type or "application/octet-stream",
+        )
+        _raise_preflight(script_result)
+
+    cut_asset: Optional[StoredAsset] = None
+    cut_bytes: Optional[bytes] = None
+    cut_result: Optional[PreflightResult] = None
+    if cut is not None:
+        cut_bytes = await _read_upload(cut, "Rough cut")
+        cut_result = await _preflight_bytes(
+            cut_bytes,
+            cut.filename or "rough-cut.mp4",
+            cut.content_type or "video/mp4",
+        )
+        _raise_preflight(cut_result)
+
     if not settings.parallel_configured:
         raise HTTPException(
             status_code=503,
@@ -149,27 +307,17 @@ async def create_project(
             "MOCK_RESEARCH=true to run against fixtures.",
         )
 
-    script_asset: Optional[StoredAsset] = None
-    if script is not None:
-        script_bytes = await _read_upload(script, "Screenplay")
+    if script_bytes is not None and script_result is not None:
         script_asset = await asset_store.put_bytes(
             script_bytes,
-            script.filename or "screenplay.txt",
-            script.content_type or "application/octet-stream",
+            script_result.filename,
+            script_result.mime_type,
         )
-
-    cut_asset: Optional[StoredAsset] = None
-    if cut is not None:
-        try:
-            cut_bytes = await _read_upload(cut, "Rough cut")
-        except HTTPException:
-            if script_asset is not None:
-                await asset_store.delete(script_asset.key)
-            raise
+    if cut_bytes is not None and cut_result is not None:
         cut_asset = await asset_store.put_bytes(
             cut_bytes,
-            cut.filename or "rough-cut.mp4",
-            cut.content_type or "video/mp4",
+            cut_result.filename,
+            cut_result.mime_type,
         )
 
     try:

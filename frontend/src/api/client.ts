@@ -33,12 +33,43 @@ export const api = {
       `/api/projects${includeArchived ? "?include_archived=true" : ""}`,
     ),
 
-  createProject: (script: File | null, cut: File | null, title: string) => {
+  preflight: (file: File) => {
+    const form = new FormData();
+    form.append("file", file);
+    return request<PreflightResult>("/api/uploads/preflight", { method: "POST", body: form });
+  },
+
+  createProject: (
+    script: File | null,
+    cut: File | null,
+    title: string,
+    onUploadProgress?: (ratio: number) => void,
+  ) => {
     const form = new FormData();
     if (script) form.append("script", script);
     if (cut) form.append("cut", cut);
     form.append("title", title);
-    return request<Project>("/api/projects", { method: "POST", body: form });
+    return new Promise<Project>((resolve, reject) => {
+      const xhr = new XMLHttpRequest();
+      xhr.open("POST", "/api/projects");
+      xhr.responseType = "json";
+      xhr.upload.onprogress = (event) => {
+        if (event.lengthComputable && onUploadProgress) {
+          onUploadProgress(Math.min(1, event.loaded / event.total));
+        }
+      };
+      xhr.onerror = () => reject(new Error("The upload connection was lost."));
+      xhr.onload = () => {
+        const body = xhr.response as Project | { detail?: string } | null;
+        if (xhr.status >= 200 && xhr.status < 300 && body) {
+          resolve(body as Project);
+          return;
+        }
+        const detail = body && "detail" in body ? body.detail : undefined;
+        reject(new Error(detail || `${xhr.status} ${xhr.statusText}`));
+      };
+      xhr.send(form);
+    });
   },
 
   runSample: () => request<Project>("/api/projects/sample", { method: "POST" }),
@@ -98,6 +129,21 @@ export const api = {
   packetUrl: (projectId: string) => `/api/projects/${projectId}/packet.md`,
   cutUrl: (projectId: string) => `/api/projects/${projectId}/cut`,
 };
+
+export interface PreflightError {
+  code: "unsupported_type" | "too_large" | "no_text_layer" | "unreadable_container" | string;
+  message: string;
+}
+
+export interface PreflightResult {
+  kind: "screenplay" | "cut" | "unknown";
+  filename: string;
+  mime_type: string;
+  size_bytes: number;
+  accepted: boolean;
+  details: Record<string, unknown>;
+  errors: PreflightError[];
+}
 
 export interface SearchResultFrame {
   type: "search_results";

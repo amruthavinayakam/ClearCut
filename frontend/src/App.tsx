@@ -5,10 +5,10 @@ import AppShell, { BootScreen } from "./app/AppShell";
 import { bootstrap, type BootResult, type Resource } from "./app/bootstrap";
 import { followInternalLink, navigate, useRoute } from "./app/router";
 import StatusMark from "./components/StatusMark";
-import Upload from "./components/Upload";
 import Workspace from "./components/Workspace";
+import NewProject from "./features/projects/NewProject";
 import ProjectLibrary from "./features/projects/ProjectLibrary";
-import type { AppConfig, MonitorRecord, Project } from "./types";
+import type { MonitorRecord, Project } from "./types";
 
 
 function message(resource: Resource<unknown> | undefined): string | undefined {
@@ -136,41 +136,6 @@ function ProjectRoute({ projectId }: { projectId: string }) {
   );
 }
 
-function NewProjectRoute({ config }: { config: AppConfig | null }) {
-  const [busy, setBusy] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-
-  async function launch(script: File | null, cut: File | null, title: string) {
-    setBusy(true);
-    setError(null);
-    try {
-      const project = await api.createProject(script, cut, title);
-      navigate(`/projects/${project.id}`);
-    } catch (reason) {
-      setError((reason as Error).message);
-    } finally {
-      setBusy(false);
-    }
-  }
-
-  return (
-    <main className="temporary-route">
-      <p className="eyebrow">New clearance scan</p>
-      <h1>Bring the page and the screen together.</h1>
-      <Upload
-        busy={busy}
-        sampleAvailable={false}
-        onSubmit={(script, cut, title) => void launch(script, cut, title)}
-        onSample={() => undefined}
-      />
-      {!config?.parallel_configured && (
-        <p>Research configuration is not available. Intake remains visible for diagnosis.</p>
-      )}
-      {error && <p role="alert">{error}</p>}
-    </main>
-  );
-}
-
 export default function App() {
   const route = useRoute();
   const [boot, setBoot] = useState<BootResult | null>(null);
@@ -267,7 +232,7 @@ export default function App() {
       );
       break;
     case "new-project":
-      content = <NewProjectRoute config={config} />;
+      content = <NewProject onCreated={(project) => navigate(`/projects/${project.id}`)} />;
       break;
     case "project":
       content = <ProjectRoute projectId={route.projectId} />;

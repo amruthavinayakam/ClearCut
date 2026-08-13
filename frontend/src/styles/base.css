@@ -172,6 +172,208 @@ a {
   color: var(--muted);
 }
 
+.intake {
+  width: min(100% - 40px, 880px);
+  margin: 0 auto;
+  padding: clamp(4rem, 9vh, 7rem) 0 6rem;
+}
+
+.intake__head {
+  max-width: 730px;
+  padding-bottom: clamp(3rem, 7vh, 5.5rem);
+}
+
+.intake__head h1 {
+  margin: 0;
+  font-family: var(--font-signal);
+  font-size: clamp(2.7rem, 6.2vw, 5.6rem);
+  font-weight: 430;
+  letter-spacing: -0.035em;
+  line-height: 0.98;
+}
+
+.intake__head > p:last-child {
+  max-width: 590px;
+  margin: 1.5rem 0 0;
+  color: var(--muted);
+  font-size: 0.88rem;
+}
+
+.intake-step {
+  display: grid;
+  grid-template-columns: 42px 1fr;
+  gap: 1.2rem;
+  padding: 1.6rem 0;
+  border-top: 1px solid var(--line);
+}
+
+.intake-step__number {
+  padding-top: 0.25rem;
+  color: var(--muted);
+  font-family: var(--font-mono);
+  font-size: 0.67rem;
+}
+
+.intake-step > div:not(.file-field) > label {
+  display: block;
+  margin-bottom: 0.7rem;
+  font-size: 0.84rem;
+  font-weight: 650;
+}
+
+.intake-step input[type="text"],
+.intake-step #production-title {
+  width: 100%;
+  padding: 0.65rem 0;
+  border: 0;
+  border-bottom: 1px solid var(--line);
+  border-radius: 0;
+  background: transparent;
+  color: var(--bone);
+  font-size: 1rem;
+}
+
+.intake-step input::placeholder {
+  color: var(--dismissed);
+}
+
+.file-field {
+  min-width: 0;
+  display: grid;
+  grid-template-columns: minmax(180px, 0.75fr) minmax(260px, 1.25fr);
+  gap: 1.5rem;
+  align-items: start;
+  border-radius: var(--radius-sm);
+}
+
+.file-field--dragging {
+  outline: 1px solid var(--amber);
+  outline-offset: 8px;
+}
+
+.file-field__copy {
+  display: flex;
+  flex-direction: column;
+  gap: 0.3rem;
+}
+
+.file-field__copy strong {
+  font-size: 0.84rem;
+}
+
+.file-field__copy span,
+.file-field__asset > span {
+  color: var(--muted);
+  font-size: 0.73rem;
+}
+
+.file-field__choose {
+  min-height: 42px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: 1px dashed var(--line);
+  border-radius: var(--radius-sm);
+  color: var(--muted);
+  cursor: pointer;
+  font-size: 0.78rem;
+}
+
+.file-field__asset {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 0.28rem 1rem;
+  padding-left: 1rem;
+  border-left: 1px solid var(--line);
+}
+
+.file-field__asset .file-field__name {
+  color: var(--bone);
+  font-family: var(--font-mono);
+  overflow-wrap: anywhere;
+}
+
+.file-field__checking {
+  color: var(--amber) !important;
+}
+
+.file-field__error {
+  grid-column: 1 / -1;
+  color: var(--risk) !important;
+}
+
+.file-field__actions {
+  grid-column: 1 / -1;
+  display: flex;
+  gap: 1rem;
+  margin-top: 0.35rem;
+}
+
+.file-field__actions label,
+.file-field__actions button {
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--muted);
+  cursor: pointer;
+  font-size: 0.7rem;
+  text-decoration: underline;
+  text-decoration-color: var(--line);
+  text-underline-offset: 3px;
+}
+
+.intake__submit {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 1rem 2rem;
+  padding: 1.6rem 0;
+  border-top: 1px solid var(--line);
+}
+
+.intake__submit p {
+  margin: 0;
+  color: var(--muted);
+  font-size: 0.78rem;
+}
+
+.intake__submit .intake__error {
+  grid-column: 1 / -1;
+  color: var(--risk);
+}
+
+.intake__progress {
+  color: var(--amber) !important;
+  font-family: var(--font-mono);
+}
+
+.button:disabled {
+  cursor: not-allowed;
+  opacity: 0.36;
+}
+
+@media (max-width: 650px) {
+  .intake-step {
+    grid-template-columns: 28px 1fr;
+    gap: 0.75rem;
+  }
+
+  .file-field {
+    grid-template-columns: 1fr;
+    gap: 1rem;
+  }
+
+  .file-field__asset {
+    padding: 0.85rem 0 0;
+    border-top: 1px solid var(--line);
+    border-left: 0;
+  }
+
+  .intake__submit {
+    grid-template-columns: 1fr;
+  }
+}
+
 .eyebrow {
   margin: 0 0 14px;
   color: var(--muted);
