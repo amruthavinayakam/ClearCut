@@ -82,6 +82,12 @@ export const api = {
       body: JSON.stringify({ archived }),
     }),
 
+  retryResearch: (projectId: string, itemId: string) =>
+    request<{ item_id: string; status: string }>(
+      `/api/projects/${projectId}/items/${itemId}/research`,
+      { method: "POST" },
+    ),
+
   setStatus: (
     projectId: string,
     itemId: string,

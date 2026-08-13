@@ -96,6 +96,14 @@ export interface AuditEvent {
   source_version: string;
 }
 
+export interface ActivityEvent {
+  id: string;
+  at: string;
+  phase: string;
+  message: string;
+  detail: Record<string, unknown>;
+}
+
 export interface ProductionDocument {
   id: string;
   kind: string;
@@ -190,6 +198,7 @@ export interface Project {
   phase: ProjectPhase;
   error: string | null;
   script: {
+    id: string;
     label: string;
     filename: string;
     title: string;
@@ -200,6 +209,7 @@ export interface Project {
     size_bytes: number;
   } | null;
   cut: {
+    id: string;
     label: string;
     filename: string;
     duration_s: number;
@@ -211,6 +221,7 @@ export interface Project {
   items: ClearanceItem[];
   reconciliation: ReconciliationFinding[];
   audit_events: AuditEvent[];
+  activity_events: ActivityEvent[];
   summary: ProjectSummary;
 }
 

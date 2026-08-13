@@ -24,7 +24,7 @@ from .assets import StoredAsset, get_asset_store
 from .agents.cut_scan import scan_cut
 from .agents.reconcile import reconcile
 from .agents.script_scan import scan_script, script_context_digest
-from .models import ClearanceItem, CutVersion, Project, ScriptVersion
+from .models import ActivityEvent, ClearanceItem, CutVersion, Project, ScriptVersion
 from .parallel_client import (
     ParallelSearchError,
     apply_dossier,
@@ -40,6 +40,10 @@ logger = logging.getLogger(__name__)
 async def _emit(project: Project, phase, message: str, **detail) -> None:
     project.phase = phase
     project.updated_at = datetime.now(timezone.utc).isoformat()
+    project.activity_events.append(
+        ActivityEvent(phase=phase, message=message, detail=detail)
+    )
+    project.activity_events = project.activity_events[-500:]
     await store.put(project)
     store.publish(
         project.id,
@@ -205,10 +209,18 @@ async def run_pipeline(
         await _emit(project, "ready", "Evidence ready for review", **summary)
         store.publish(project.id, {"type": "done", "phase": "ready", "summary": summary})
 
-    except Exception as exc:  # noqa: BLE001 - surface the failure to the client
+    except Exception:  # noqa: BLE001 - preserve partial results and expose a safe recovery state
         logger.exception("Pipeline failed for project %s", project_id)
         project.phase = "failed"
-        project.error = f"{type(exc).__name__}: {exc}"
+        project.error = "Analysis stopped before completion. Existing results remain available."
+        project.activity_events.append(
+            ActivityEvent(
+                phase="failed",
+                message=project.error,
+                detail={"recoverable": True},
+            )
+        )
+        project.activity_events = project.activity_events[-500:]
         await store.put(project)
         store.publish(
             project.id, {"type": "error", "phase": "failed", "message": project.error}
@@ -230,7 +242,7 @@ async def _research_all(project: Project, items: list[ClearanceItem]) -> None:
 
 async def research_item(project: Project, item: ClearanceItem) -> None:
     """Search, then dossier, then hand to a human. Never sets an approval state."""
-    if not item.has_human_decision:
+    if not item.has_human_decision and item.workflow_status != "researching":
         item.transition(
             "researching",
             actor="agent",

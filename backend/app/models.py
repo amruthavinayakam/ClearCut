@@ -222,6 +222,14 @@ class AuditEvent(BaseModel):
     detail: dict[str, Any] = Field(default_factory=dict)
 
 
+class ActivityEvent(BaseModel):
+    id: str = Field(default_factory=lambda: _uid("activity"))
+    at: str = Field(default_factory=_now)
+    phase: str
+    message: str
+    detail: dict[str, Any] = Field(default_factory=dict)
+
+
 # --------------------------------------------------------------------------
 # Clearance item
 # --------------------------------------------------------------------------
@@ -455,6 +463,7 @@ class Project(BaseModel):
     items: list[ClearanceItem] = Field(default_factory=list)
     reconciliation: list[ReconciliationFinding] = Field(default_factory=list)
     audit_events: list[AuditEvent] = Field(default_factory=list)
+    activity_events: list[ActivityEvent] = Field(default_factory=list)
 
     def item(self, item_id: str) -> Optional[ClearanceItem]:
         return next((i for i in self.items if i.id == item_id), None)

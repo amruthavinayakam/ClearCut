@@ -20,7 +20,7 @@ from .assets import StoredAsset, get_asset_store
 from .config import get_settings
 from .export import to_markdown
 from .models import Actor, ApprovalDenied, Project, ProductionDocument, WorkflowStatus
-from .pipeline import start_project
+from .pipeline import research_item, start_project
 from .screenplay import (
     NoTextLayerError,
     ScreenplayParseError,
@@ -573,6 +573,30 @@ async def set_item_status(
         },
     )
     return {"item_id": item_id, "status": item.workflow_status, "event": event.model_dump()}
+
+
+@app.post("/api/projects/{project_id}/items/{item_id}/research")
+async def retry_item_research(project_id: str, item_id: str) -> dict[str, Any]:
+    project = await _require(project_id)
+    item = project.item(item_id)
+    if item is None:
+        raise HTTPException(status_code=404, detail="Item not found.")
+    if item.workflow_status == "researching":
+        raise HTTPException(status_code=409, detail="Research is already in progress.")
+    item.research_error = None
+    item.transition(
+        "researching",
+        actor="coordinator",
+        rationale="Coordinator requested another evidence research attempt.",
+    )
+    item.log(
+        "research_retry_requested",
+        actor="coordinator",
+        rationale="Coordinator requested another evidence research attempt.",
+    )
+    await store.put(project)
+    asyncio.create_task(research_item(project, item))
+    return {"item_id": item.id, "status": "researching"}
 
 
 @app.post("/api/projects/{project_id}/items/{item_id}/documents")

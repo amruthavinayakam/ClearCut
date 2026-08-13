@@ -9,7 +9,7 @@ from fastapi.testclient import TestClient
 import backend.app.main as main_module
 from backend.app.assets import FilesystemAssetStore
 from backend.app.main import app
-from backend.app.models import ClearanceItem, CutVersion, Project
+from backend.app.models import ActivityEvent, ClearanceItem, CutVersion, Project
 from backend.app.store import store
 
 
@@ -188,3 +188,36 @@ def test_project_creation_reuses_preflight_type_rules(client: TestClient) -> Non
 
     assert response.status_code == 400
     assert "unsupported_type" in response.json()["detail"]
+
+
+def test_persisted_activity_survives_a_fresh_project_get(client: TestClient) -> None:
+    project = Project(
+        title="Persistent activity",
+        activity_events=[
+            ActivityEvent(
+                phase="scanning_cut",
+                message="Detected two cut elements.",
+                detail={"count": 2},
+            )
+        ],
+    )
+    asyncio.run(store.put(project))
+
+    response = client.get(f"/api/projects/{project.id}")
+
+    assert response.status_code == 200
+    assert response.json()["activity_events"][0]["message"] == "Detected two cut elements."
+
+
+def test_research_retry_refuses_duplicate_inflight_work(
+    client: TestClient, project_with_item: tuple[str, str]
+) -> None:
+    project_id, item_id = project_with_item
+    project = asyncio.run(store.get(project_id))
+    assert project is not None
+    project.item(item_id).workflow_status = "researching"  # type: ignore[union-attr]
+    asyncio.run(store.put(project))
+
+    response = client.post(f"/api/projects/{project_id}/items/{item_id}/research")
+
+    assert response.status_code == 409

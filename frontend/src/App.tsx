@@ -1,11 +1,11 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 
-import { api, streamProject } from "./api/client";
+import { api } from "./api/client";
 import AppShell, { BootScreen } from "./app/AppShell";
 import { bootstrap, type BootResult, type Resource } from "./app/bootstrap";
 import { followInternalLink, navigate, useRoute } from "./app/router";
-import StatusMark from "./components/StatusMark";
 import Workspace from "./components/Workspace";
+import AnalysisWorkspace from "./features/analysis/AnalysisWorkspace";
 import NewProject from "./features/projects/NewProject";
 import ProjectLibrary from "./features/projects/ProjectLibrary";
 import type { MonitorRecord, Project } from "./types";
@@ -27,6 +27,7 @@ function ProjectRoute({ projectId }: { projectId: string }) {
   const [project, setProject] = useState<Project | null>(null);
   const [monitors, setMonitors] = useState<MonitorRecord[]>([]);
   const [error, setError] = useState<string | null>(null);
+  const [reviewRequested, setReviewRequested] = useState(false);
 
   const refresh = useCallback(async () => {
     try {
@@ -45,26 +46,7 @@ function ProjectRoute({ projectId }: { projectId: string }) {
   }, [projectId]);
 
   useEffect(() => {
-    let active = true;
-    let close: () => void = () => undefined;
-    void refresh().then((loaded) => {
-      if (!active || !loaded || loaded.phase === "ready" || loaded.phase === "failed") return;
-      close = streamProject(projectId, (frame) => {
-        if (!active) return;
-        if (frame.type === "snapshot") setProject(frame.project);
-        if (frame.type === "progress") {
-          setProject((current) =>
-            current ? { ...current, phase: frame.phase as Project["phase"] } : current,
-          );
-        }
-        if (frame.type === "done" || frame.type === "monitor_event") void refresh();
-        if (frame.type === "error") setError(frame.message);
-      });
-    });
-    return () => {
-      active = false;
-      close();
-    };
+    void refresh();
   }, [projectId, refresh]);
 
   if (error && !project) {
@@ -88,7 +70,7 @@ function ProjectRoute({ projectId }: { projectId: string }) {
     );
   }
 
-  if (project.phase === "ready") {
+  if (project.phase === "ready" || reviewRequested) {
     return (
       <main className="main legacy-workspace">
         <Workspace
@@ -101,38 +83,14 @@ function ProjectRoute({ projectId }: { projectId: string }) {
     );
   }
 
-  if (project.phase === "failed") {
-    return (
-      <section className="route-state">
-        <p className="eyebrow">Analysis stopped</p>
-        <h1>{project.title}</h1>
-        <p>{project.error ?? "The analysis did not complete."}</p>
-        <button className="button button--quiet" type="button" onClick={() => void refresh()}>
-          Refresh project
-        </button>
-      </section>
-    );
-  }
-
-  const phase = project.phase.replace(/_/g, " ");
   return (
-    <section className="route-state analysis-bridge" aria-live="polite">
-      <p className="eyebrow">Clearance analysis</p>
-      <h1>{project.title}</h1>
-      <StatusMark label={phase} tone="amber" />
-      <p>
-        ClearCut is reading the available production material. Completed evidence remains
-        available as each stage settles.
-      </p>
-      <ol className="analysis-sequence">
-        <li>Read script</li>
-        <li>Scan cut</li>
-        <li>Reconcile versions</li>
-        <li>Research rights</li>
-        <li>Human review</li>
-      </ol>
-      {error && <p role="alert">{error}</p>}
-    </section>
+    <AnalysisWorkspace
+      initialProject={project}
+      onReview={(latest) => {
+        setProject(latest);
+        setReviewRequested(true);
+      }}
+    />
   );
 }
 
