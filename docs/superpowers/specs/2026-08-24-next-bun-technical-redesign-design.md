@@ -6,7 +6,7 @@
 
 **Branch:** `aritro`
 
-**Decision:** Next.js frontend with a separate Bun API
+**Decision:** Next.js on Cloudflare Workers with a separate Bun API in a Cloudflare Container
 
 ## 1. Purpose
 
@@ -14,6 +14,7 @@ ClearCut will migrate from its current React/Vite frontend and Python/FastAPI ba
 
 - a latest-stable Next.js App Router frontend;
 - a dedicated Bun API for long-running analysis, uploads, SSE, Gemini, Parallel, webhooks, revisions, documents, and exports;
+- a Cloudflare-first production topology using OpenNext on Workers, a narrow edge gateway, a Bun API Container, R2, and D1;
 - shared Zod contracts between the frontend and backend;
 - shadcn/ui with Tailwind CSS v4;
 - Geist Sans and Geist Mono;
@@ -63,6 +64,8 @@ All of these behaviors remain in scope. A visually polished application that omi
 - Share one canonical contract package across server and client.
 - Keep long-running and streaming work outside the Next.js rendering process.
 - Preserve same-origin browser requests at `/api/*`.
+- Deploy the product on Cloudflare without replacing the required Bun backend runtime with the Workers runtime.
+- Keep large media bytes out of both the Next.js Worker and Bun Container through direct R2 uploads.
 - Preserve local fixture-driven development without presenting fixture research as live evidence.
 - Keep modules small enough to test and change independently.
 - Retire the old frontend and Python backend only after behavioral parity is verified.
@@ -70,11 +73,12 @@ All of these behaviors remain in scope. A visually polished application that omi
 ## 4. Non-goals
 
 - No authentication, billing, teams, or multi-tenant workspace system in this migration.
-- No new database product or live-data migration. Development remains in-memory/local by default, matching the prior instruction to defer live-data work.
+- No existing-user data migration. Local development remains in-memory/filesystem by default; D1 and R2 are production adapters, not a live-data product initiative.
 - No legal conclusion engine. ClearCut remains research for qualified human review.
 - No landing page, editorial storytelling, hackathon video workflow, or presentation-only route.
 - No broad visual theming system beyond the product's light technical shell and dark media canvas.
-- No queue infrastructure or separate worker service in the first parity release.
+- No Cloudflare Queues, Workflows, or autoscaled Container pool in the first parity release.
+- No multi-region active-active job execution. The first release uses one named Bun Container so its in-process job and SSE registries remain coherent.
 - No new clearance categories unless required to represent an existing model field.
 - No speculative AI features beyond the existing Gemini, Parallel, monitoring, and copilot responsibilities.
 
@@ -87,12 +91,13 @@ The repository becomes a Bun workspace:
 ```text
 ClearCut/
 ├── apps/
-│   ├── web/                 # Next.js App Router product UI
-│   └── api/                 # Bun + Hono HTTP/SSE service
+│   ├── web/                 # Next.js App Router + OpenNext Worker
+│   ├── edge/                # Cloudflare API gateway + Container binding
+│   └── api/                 # Bun + Hono HTTP/SSE Container service
 ├── packages/
 │   ├── contracts/           # Zod request/response/event schemas
 │   ├── domain/              # State machine, invariants, reconciliation, revisions
-│   ├── integrations/        # Gemini, Parallel, Firestore, GCS adapters
+│   ├── integrations/        # Gemini, Parallel, D1, R2, provider staging adapters
 │   └── ui/                  # ClearCut-owned shadcn components and tokens
 ├── fixtures/                # Clearly labeled deterministic research fixtures
 ├── docs/
@@ -113,19 +118,32 @@ ClearCut/
 - shadcn/ui source components, Tailwind composition, accessibility, and responsive behavior;
 - browser continuity state that is explicitly local to the user interface.
 
+In production, `apps/web` is built by `@opennextjs/cloudflare` and runs as a Cloudflare Worker with static assets. It must not contain the analysis API or own the Bun Container lifecycle.
+
+`apps/edge` owns:
+
+- the production `/api/*` Worker route;
+- the named Cloudflare Container binding and Container lifecycle;
+- streaming requests and responses between the browser and Bun without buffering SSE or asset bodies;
+- the narrow D1/R2 binding bridge used by the Bun Container;
+- R2 URL signing, multipart mechanics, and object-metadata verification primitives;
+- Cloudflare request IDs, observability fields, and infrastructure-level errors.
+
+The edge layer contains no clearance domain rules, Gemini prompts, Parallel orchestration, legal workflow state transitions, or UI behavior.
+
 `apps/api` owns:
 
 - all `/api` routes;
-- upload preflight and multipart streaming;
+- upload preflight, upload-session authorization, and finalization;
 - project, case, document, revision, monitor, packet, and copilot commands;
 - Gemini screenplay and multimodal cut scanning;
 - Parallel Search, Task, and Monitor calls;
 - SSE progress and polling snapshots;
-- persistence and asset abstractions;
+- persistence, asset, and provider-media-staging abstractions;
 - safety invariants and audit history;
 - authenticated Parallel Monitor webhooks.
 
-Next.js must not proxy long-running work through Route Handlers. Its `next.config.ts` rewrite forwards `/api/:path*` to the Bun service, keeping a single browser origin without coupling analysis lifetime to the rendering server.
+Next.js must not proxy long-running work through Route Handlers. Locally, its `next.config.ts` rewrite forwards `/api/:path*` to the Bun service. In production, Cloudflare routes `/api/*` directly to `apps/edge`, so API traffic never enters the Next.js Worker.
 
 ### 5.3 Local and production origins
 
@@ -136,12 +154,21 @@ Next.js must not proxy long-running work through Route Handlers. Its `next.confi
 
 The root development script must start both services through Portless and must never emit a `.localhost` product URL.
 
-In production, web and API may deploy as separate services. The public web service continues to expose a same-origin `/api` surface through a platform rewrite or reverse proxy.
+Production uses one public hostname with two Cloudflare Worker routes:
+
+- `clearcut.example/api/*` → `apps/edge` → one named Bun API Container;
+- `clearcut.example/*` → the OpenNext Worker in `apps/web`.
+
+The more-specific `/api/*` route takes precedence. This keeps the browser same-origin while preventing Next.js from becoming an API proxy. Preview deployments use equivalent Worker hostnames and bindings without changing the browser contract.
 
 ### 5.4 Dependency baseline
 
 - Bun is the package manager, script runner, backend runtime, and backend test runner.
 - Next.js uses the latest stable release available when the migration is scaffolded. The approved baseline is Next.js 16.2 or newer within the 16.x stable line; canary releases are excluded.
+- `@opennextjs/cloudflare` builds the Next.js application for Workers; Cloudflare preview is required because `next dev` does not reproduce the Workers runtime.
+- Wrangler v4 configures the web Worker, edge Worker, Container, D1 database, and R2 bucket. Bindings receive generated TypeScript types.
+- Worker compatibility dates are pinned to the scaffold date or newer—initially `2026-08-24`—and `nodejs_compat` is enabled where OpenNext requires it.
+- The API Container image targets Linux `amd64` and starts the Hono server with Bun; the Container boundary is what preserves a real Bun runtime in production.
 - React 19 is used through the Next.js-supported version.
 - Tailwind CSS v4 is used with CSS-first configuration.
 - shadcn/ui is initialized non-interactively at its latest stable CLI version.
@@ -244,13 +271,26 @@ apps/api/src/
 └── repositories/
     ├── project-repository.ts
     ├── memory-project-repository.ts
-    ├── firestore-project-repository.ts
+    ├── d1-project-repository.ts
     ├── asset-store.ts
     ├── filesystem-asset-store.ts
-    └── gcs-asset-store.ts
+    └── r2-asset-store.ts
 ```
 
 Each route module validates input and delegates. Domain rules live outside routes, and external API calls live outside domain code.
+
+The Cloudflare boundary is independently small:
+
+```text
+apps/edge/src/
+├── worker.ts               # /api forwarding and response streaming
+├── container.ts            # Named Container class and lifecycle
+├── bindings.ts             # D1/R2 internal bridge
+├── uploads.ts              # Short-lived R2 upload sessions
+└── errors.ts               # Infrastructure-level failures only
+```
+
+`apps/edge` imports contracts for transport validation but never imports the domain package. `apps/api` accesses D1 and R2 through repository interfaces; in Cloudflare it reaches a reserved internal binding origin handled by the Container outbound Worker, while local adapters use memory and the filesystem. The internal binding origin is not publicly routable.
 
 ### 7.2 Pipeline execution
 
@@ -265,7 +305,7 @@ Project creation stores the initial record before starting analysis. The orchest
 
 Independent screenplay and cut scans may run concurrently. Per-case research uses a configurable concurrency limit and preserves the existing Search-before-Task order for each item.
 
-For the first parity release, the orchestration process runs inside the dedicated Bun API service with an explicit in-process job registry. Project state is persisted after every meaningful stage. A process restart may interrupt active local jobs, but completed persisted state remains valid. A durable external queue is deferred.
+For the first parity release, the orchestration process runs inside the dedicated Bun API service with an explicit in-process job registry. Cloudflare routes every API request to one named Container instance, avoiding split job registries and SSE ownership. Project state is persisted to D1 after every meaningful stage. The Container sleep window must exceed the maximum configured analysis duration, and an active SSE connection keeps the instance serving while a visible analysis is running. A Container restart may still interrupt an active job, but completed persisted state remains valid and the UI exposes recovery. A durable external queue is deferred.
 
 ### 7.3 Gemini integration
 
@@ -276,6 +316,14 @@ The Gemini adapter exposes narrow methods:
 - `answerCopilot(input): Promise<CopilotResponse>`
 
 It performs model probing when no supported model is pinned, validates structured output through Zod, retains source anchors and timecodes, and reports malformed model output as a recoverable pipeline error. It must not fabricate successful findings when credentials are missing.
+
+R2 remains the product asset source of truth. A `GeminiMediaStager` abstraction prepares temporary provider-compatible input only when required:
+
+- Gemini AI Studio mode uploads the R2 object through the Gemini Files API;
+- Vertex mode may copy the R2 object to a temporary GCS object when a `gs://` reference is required;
+- provider staging records are short-lived, deletable, and never stored as the canonical project asset.
+
+This adapter boundary keeps GCS optional and provider-specific rather than making it ClearCut's production asset store.
 
 ### 7.4 Parallel integration
 
@@ -301,14 +349,30 @@ Every evidence object retains its citation URL and retrieval metadata. Fixture m
 
 The client reconnects with bounded exponential backoff and polls `GET /api/projects/:projectId` when SSE remains unavailable. The interface shows whether it is live, reconnecting, or using polling; it never silently freezes.
 
+The edge Worker forwards the SSE response body as a stream and does not parse, aggregate, cache, or reconstruct events. `Cache-Control: no-store`, heartbeat timing, `Last-Event-ID`, and request-abort signals must survive the gateway boundary.
+
 ### 7.6 Uploads and assets
 
 - Preflight validates supported media type, size, required input combination, and screenplay text-layer expectations.
-- Upload handlers stream to the asset store instead of buffering an entire rough cut in memory.
-- The local asset adapter uses an explicit configured directory.
-- The GCS adapter stores opaque keys on project records and provides Gemini-compatible object references.
+- Local upload handlers stream to an explicit configured filesystem directory instead of buffering an entire rough cut in memory.
+- In Cloudflare, the API authorizes a short-lived R2 upload session after preflight, then asks the internal edge binding for scoped upload URLs; the browser uploads directly to R2 so media bytes do not transit the Next.js Worker, edge Worker, or Bun Container.
+- Large rough cuts use presigned multipart upload parts. Small screenplays and documents may use a single presigned `PUT`.
+- R2 CORS permits only the product origins, required upload methods and headers, and no wildcard production origin.
+- Finalization verifies the object key, expected size, media metadata, and upload ownership before a project or document can reference it.
+- Project records store opaque asset keys, content metadata, and integrity fields—not public bucket URLs or provider-staging URLs.
 - Cut playback supports byte ranges and the existing browser media controls.
 - Documents use the same asset abstraction and preserve recorded metadata separately from file content.
+
+### 7.7 Cloudflare persistence and deployment
+
+- D1 stores durable project metadata, cases, evidence, audit entries, revision records, monitor records, upload sessions, and job-stage snapshots through the repository contract.
+- R2 stores screenplay, rough-cut, revision, document, and export objects through the asset-store contract.
+- Local development defaults to the memory repository and filesystem asset store; it does not require a Cloudflare account or remote state.
+- The Container receives no public D1 or R2 credentials. Its outbound Worker handles narrowly scoped internal D1/R2 requests with native bindings.
+- R2 S3 upload credentials, Gemini credentials, Parallel credentials, and webhook secrets are Wrangler secrets and are never exposed through Next.js public environment variables.
+- `wrangler.jsonc` contains non-secret bindings and checked-in migrations/configuration; generated binding types are committed only when the repository convention requires them.
+- Workers Observability is enabled for both web and edge deployments. Logs use request, project, job, and stage IDs but never screenplay text, private evidence payloads, signed URLs, credentials, or legal-document contents.
+- The first release deploys one named Container. Adding a pool, queue, or workflow requires a later durability design and is not an implicit scaling toggle.
 
 ## 8. Frontend application structure
 
@@ -628,7 +692,10 @@ Hono requests are tested without binding a public port. Tests cover:
 - webhook authentication and retry idempotency;
 - Gemini/Parallel adapter failures and partial results;
 - memory/filesystem adapters;
-- Firestore/GCS adapter contract tests without making them a local prerequisite.
+- D1/R2 adapter contract tests without making remote Cloudflare state a local prerequisite;
+- edge routing, Container binding, internal binding-origin rejection, SSE pass-through, and request-abort propagation;
+- R2 upload-session expiry, object-key scoping, multipart completion, metadata verification, and finalization idempotency;
+- Gemini Files API and optional Vertex GCS staging cleanup through mocked provider boundaries.
 
 ### 14.3 Frontend tests
 
@@ -647,6 +714,8 @@ Component and integration tests cover:
 ### 14.4 End-to-end tests
 
 Playwright starts the actual Next and Bun services in explicit fixture mode. Browser request interception is not the primary fake backend. Tests exercise the real shared contracts and server transitions.
+
+A separate Cloudflare integration lane builds the OpenNext Worker, starts the edge Worker and local Container through Wrangler where Container tooling is available, and verifies same-origin `/api/health`, SSE headers, D1/R2 bindings, and direct-upload authorization. The ordinary local product loop remains Portless-based and does not depend on Wrangler.
 
 The release flow covers:
 
@@ -668,13 +737,16 @@ Migration is vertical and parity-gated:
 1. Establish Bun workspace, shared contracts, and CI scripts without deleting the old app.
 2. Port pure domain models and invariants with tests.
 3. Port memory/filesystem repositories and API system/project routes.
-4. Port asset, Gemini, Parallel, pipeline, SSE, and webhook services.
-5. Scaffold the Next shell, tokens, fonts, shadcn primitives, and product routes.
-6. Rebuild library, intake, analysis, review, documents, revisions, packet, commands, and copilot as complete vertical slices.
-7. Run old and new contract/fixture outputs against parity assertions where shapes overlap.
-8. Move the Portless `clearcut.lcl` route to the new Next service only after the end-to-end release flow passes.
-9. Remove Vite, React 18-specific wiring, custom router, custom modal primitives, Python runtime, FastAPI, and generated static output.
-10. Rewrite README, environment examples, Docker/deployment configuration, and verification commands for the new stack.
+4. Add D1/R2 repository adapters, migrations, and the provider-specific Gemini media-staging boundary.
+5. Add the minimal edge Worker, named Container class, internal binding bridge, R2 upload sessions, and local Cloudflare contract tests.
+6. Port Gemini, Parallel, pipeline, SSE, webhook, and packet services into the Bun API.
+7. Scaffold the Next shell, OpenNext adapter, tokens, fonts, shadcn primitives, and product routes.
+8. Rebuild library, intake, analysis, review, documents, revisions, packet, commands, and copilot as complete vertical slices.
+9. Run old and new contract/fixture outputs against parity assertions where shapes overlap.
+10. Pass both the Portless end-to-end lane and Cloudflare preview/integration lane.
+11. Move the Portless `clearcut.lcl` route to the new Next service only after the end-to-end release flow passes.
+12. Remove Vite, React 18-specific wiring, custom router, custom modal primitives, Python runtime, FastAPI, and generated static output.
+13. Rewrite README, environment examples, Docker/Cloudflare deployment configuration, D1 migrations, R2 CORS setup, and verification commands for the new stack.
 
 The migration must not maintain two production implementations after parity. Compatibility code is temporary and deleted in the same migration.
 
@@ -690,9 +762,13 @@ bun run lint
 bun test
 bun run test:e2e
 bun run build
+bun run cf:typegen
+bun run cf:check
 ```
 
-`bun run dev` must start both Portless-backed services. `bun run build` must build the Next application and validate the Bun API entrypoint. The final smoke check must verify both the user-facing application and `/api/health` through `https://clearcut.lcl`.
+`bun run dev` must start both Portless-backed services. `bun run build` must build the Next application and validate the Bun API entrypoint. `bun run cf:typegen` regenerates Worker binding types. `bun run cf:check` builds the OpenNext Worker, validates both Wrangler configurations and bindings, checks D1 migrations and R2 CORS configuration, and performs a non-deploying Cloudflare bundle validation. An opt-in `bun run cf:preview` starts the Workers/Container preview and an explicit `bun run cf:deploy` performs the authenticated deployment; neither is hidden inside local development.
+
+The final local smoke check verifies both the user-facing application and `/api/health` through `https://clearcut.lcl`. The Cloudflare smoke check verifies the preview hostname, same-origin `/api/health`, one SSE connection, and a disposable R2 upload/finalize/read cycle.
 
 ## 17. Acceptance criteria
 
@@ -702,15 +778,21 @@ The migration is complete only when:
 - the frontend is the latest stable Next.js App Router line approved above;
 - the UI uses shadcn/ui, Tailwind CSS v4, Geist Sans, and Geist Mono;
 - no editorial font, warm paper theme, gradient, glass, or decorative card system remains;
-- the Bun API owns long-running work and Next.js stays a separate web process;
+- the Next.js application builds with OpenNext and runs as a Cloudflare Worker;
+- the Bun API owns long-running work and runs with the Bun runtime inside a named Cloudflare Container;
+- the edge Worker owns `/api/*`, Container routing, and native Cloudflare bindings without absorbing domain logic;
 - all browser API traffic remains same-origin under `/api`;
+- production API traffic does not pass through a Next.js Route Handler;
+- D1 is the durable production project repository and R2 is the durable production asset store;
+- rough-cut bytes upload directly to R2 using short-lived, scoped sessions and never cross the Next.js Worker or Bun Container;
+- provider media staging is temporary and never replaces the R2 source of truth;
 - all current product flows in section 2 are usable in the new application;
 - all safety invariants in section 6.3 pass automated tests;
 - SSE reconnect and polling recovery are visibly functional;
 - desktop, tablet, mobile, keyboard, and reduced-motion paths pass;
 - the complete Playwright release flow passes against the real fixture-mode Bun API;
 - no browser console error appears in the full flow;
-- `bun run typecheck`, `bun run lint`, `bun test`, `bun run test:e2e`, and `bun run build` pass;
+- `bun run typecheck`, `bun run lint`, `bun test`, `bun run test:e2e`, `bun run build`, `bun run cf:typegen`, and `bun run cf:check` pass;
 - README and `idea.md` describe the application that actually runs;
 - the Vite frontend and Python backend are removed after parity, not left as the default implementation.
 
@@ -722,4 +804,16 @@ Three architectures were considered:
 - a Next.js frontend with a separate Bun API;
 - a Next.js frontend, Bun API, and durable external job service.
 
-The approved choice is the second option. It isolates the interactive web application from large uploads, long-running agent analysis, SSE connections, and webhooks while avoiding premature queue infrastructure. Shared Zod contracts and a same-origin rewrite keep the two services coherent.
+The approved choice is the second option. The Cloudflare deployment refines it rather than changing it: OpenNext runs the web application in a Worker, a more-specific `/api/*` Worker route owns a thin gateway, and that gateway forwards to one named Container running the Bun API. R2 direct uploads isolate both runtimes from large media bodies; D1 and R2 provide production persistence; shared Zod contracts and one same-origin browser surface keep the system coherent. A Queue, Workflow, or Container pool remains a later durability decision.
+
+## 19. Platform references
+
+The Cloudflare-specific decisions are based on the official platform documentation:
+
+- [Next.js on Cloudflare Workers](https://developers.cloudflare.com/workers/framework-guides/web-apps/nextjs/)
+- [Cloudflare Containers: get started](https://developers.cloudflare.com/containers/get-started/)
+- [Container class and lifecycle](https://developers.cloudflare.com/containers/container-class/)
+- [Container scaling and routing](https://developers.cloudflare.com/containers/platform-details/scaling-and-routing/)
+- [Container access to Worker bindings](https://developers.cloudflare.com/containers/platform-details/workers-connections/)
+- [R2 presigned URLs](https://developers.cloudflare.com/r2/api/s3/presigned-urls/)
+- [R2 upload options](https://developers.cloudflare.com/r2/objects/upload-objects/)
