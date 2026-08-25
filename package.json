@@ -1,0 +1,24 @@
+{
+  "name": "clearcut",
+  "private": true,
+  "packageManager": "bun@1.3.8",
+  "workspaces": [
+    "apps/*",
+    "packages/*"
+  ],
+  "scripts": {
+    "dev": "concurrently -k -n web,api 'bun --filter @clearcut/web dev' 'bun --filter @clearcut/api dev'",
+    "typecheck": "bun --filter '*' typecheck",
+    "lint": "bun --filter '*' lint",
+    "test": "bun test packages apps",
+    "test:e2e": "bun --filter @clearcut/web test:e2e",
+    "build": "bun --filter @clearcut/api build && bun --filter @clearcut/web build",
+    "cf:typegen": "bun --filter @clearcut/web cf:typegen && bun --filter @clearcut/edge cf:typegen",
+    "cf:check": "bun --filter @clearcut/web cf:check && bun --filter @clearcut/edge cf:check"
+  },
+  "devDependencies": {
+    "@types/bun": "^1.4.0",
+    "concurrently": "latest",
+    "typescript": "latest"
+  }
+}

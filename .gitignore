@@ -4,6 +4,10 @@ __pycache__/
 .env
 .env.local
 node_modules/
+.next/
+.open-next/
+.wrangler/
+coverage/
 frontend/dist/
 backend/app/static/
 .DS_Store
