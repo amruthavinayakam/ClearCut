@@ -33,6 +33,13 @@ describe("upload preflight", () => {
         maxUploadBytes: 4,
         mockResearch: true,
         researchConcurrency: 4,
+        googleApiKey: "",
+        geminiModel: "gemini-2.5-flash",
+        parallelApiKey: "",
+        parallelProcessor: "core",
+        parallelMonitorProcessor: "lite",
+        publicBaseUrl: "",
+        webhookSecret: "test-secret",
       },
     });
     const unsupported = await preflight(app, new File(["bad"], "rights.exe"));

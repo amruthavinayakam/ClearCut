@@ -1,0 +1,53 @@
+{
+  "notes": "MOCK: Deterministic rough-cut scan for local review.",
+  "detections": [
+    {
+      "name": "MOCK: Ordinary Weather",
+      "category": "music",
+      "description": "MOCK: A recognizable recording plays from 00:31 to 00:43.",
+      "start_seconds": 18.2,
+      "end_seconds": 26.8,
+      "representative_seconds": 22.4,
+      "modality": "audio",
+      "observation": "MOCK: Chorus and title lyric are audible under the scene.",
+      "readable_text": "MOCK: Player display reads Ordinary Weather.",
+      "confidence": "high"
+    },
+    {
+      "name": "MOCK: Harbour Lights No. 4",
+      "category": "artwork",
+      "description": "MOCK: The generic scripted photograph is a specific identifiable work.",
+      "start_seconds": 2.1,
+      "end_seconds": 7.6,
+      "representative_seconds": 4.8,
+      "modality": "visual",
+      "observation": "MOCK: Signature and edition mark are readable in a close shot.",
+      "readable_text": "MOCK: E. Vale, Harbour Lights No. 4, 1988.",
+      "confidence": "high"
+    },
+    {
+      "name": "MOCK: The Velvet Room",
+      "category": "signage",
+      "description": "MOCK: The club sign appears as scripted.",
+      "start_seconds": 29.0,
+      "end_seconds": 38.2,
+      "representative_seconds": 33.1,
+      "modality": "visual",
+      "observation": "MOCK: Exterior neon sign is legible and featured.",
+      "readable_text": "MOCK: THE VELVET ROOM",
+      "confidence": "high"
+    },
+    {
+      "name": "MOCK: Meridian Lager",
+      "category": "brand",
+      "description": "MOCK: An unscripted beer label is visible on the table.",
+      "start_seconds": 10.4,
+      "end_seconds": 15.1,
+      "representative_seconds": 12.0,
+      "modality": "visual",
+      "observation": "MOCK: Product label faces camera in a sustained medium shot.",
+      "readable_text": "MOCK: MERIDIAN LAGER",
+      "confidence": "high"
+    }
+  ]
+}

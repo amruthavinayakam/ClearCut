@@ -1,0 +1,28 @@
+{
+  "candidate_rights_holders": [
+    {
+      "name": "MOCK: Candidate Rights Administration",
+      "role": "MOCK: licensing administrator",
+      "rights_implicated": ["MOCK: reproduction or synchronization"],
+      "share": "MOCK: Unknown",
+      "confidence": "low",
+      "basis": "MOCK: Fixture data; ownership has not been verified."
+    }
+  ],
+  "licensing_routes": [
+    {
+      "organization": "MOCK: Candidate Rights Administration",
+      "route": "MOCK: Confirm ownership, then submit a permission request.",
+      "contact": "MOCK: permissions@example.test",
+      "url": "https://example.test/mock-permissions"
+    }
+  ],
+  "research_summary": "MOCK: A candidate administrator and public contact path were assembled from fixture data for human review.",
+  "evidence_gaps": ["MOCK: Current ownership and authority remain unverified."],
+  "unresolved_questions": ["MOCK: Which exact rights and territories are controlled?"],
+  "recommended_actions": ["MOCK: Verify the chain of title before making contact."],
+  "public_domain_status": "MOCK: Unknown",
+  "known_disputes": "MOCK: None researched",
+  "overall_confidence": "low",
+  "run_id": "mock-task-run"
+}

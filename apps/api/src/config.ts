@@ -8,6 +8,13 @@ export type ApiConfig = {
   maxUploadBytes: number;
   mockResearch: boolean;
   researchConcurrency: number;
+  googleApiKey: string;
+  geminiModel: string;
+  parallelApiKey: string;
+  parallelProcessor: string;
+  parallelMonitorProcessor: string;
+  publicBaseUrl: string;
+  webhookSecret: string;
 };
 
 function positiveInteger(value: string | undefined, fallback: number): number {
@@ -24,5 +31,12 @@ export function readConfig(env: Record<string, string | undefined> = process.env
     maxUploadBytes: positiveInteger(env.MAX_UPLOAD_BYTES, 200 * 1024 * 1024),
     mockResearch: env.MOCK_RESEARCH?.toLocaleLowerCase() === "true",
     researchConcurrency: positiveInteger(env.RESEARCH_CONCURRENCY, 16),
+    googleApiKey: env.GOOGLE_API_KEY?.trim() ?? "",
+    geminiModel: env.GEMINI_MODEL?.trim() ?? "gemini-2.5-flash",
+    parallelApiKey: env.PARALLEL_API_KEY?.trim() ?? "",
+    parallelProcessor: env.PARALLEL_PROCESSOR?.trim() ?? "core",
+    parallelMonitorProcessor: env.PARALLEL_MONITOR_PROCESSOR?.trim() ?? "lite",
+    publicBaseUrl: env.PUBLIC_BASE_URL?.trim() ?? "",
+    webhookSecret: env.PARALLEL_WEBHOOK_SECRET?.trim() ?? "",
   };
 }

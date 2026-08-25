@@ -11,6 +11,9 @@ import { registerProjectRoutes } from "./routes/projects";
 import { registerRevisionRoutes } from "./routes/revisions";
 import { registerSystemRoutes } from "./routes/system";
 import { registerUploadRoutes } from "./routes/uploads";
+import { registerMonitorRoutes } from "./routes/monitors";
+import { registerChatRoutes } from "./routes/chat";
+import { registerStreamRoutes } from "./routes/stream";
 
 export type { ApiDependencies } from "./context";
 
@@ -31,5 +34,8 @@ export function createApp(dependencies: ApiDependencies) {
   registerDocumentRoutes(app, dependencies);
   registerPacketRoutes(app, dependencies);
   registerRevisionRoutes(app, dependencies);
+  registerMonitorRoutes(app, dependencies);
+  registerChatRoutes(app, dependencies);
+  registerStreamRoutes(app, dependencies);
   return app;
 }

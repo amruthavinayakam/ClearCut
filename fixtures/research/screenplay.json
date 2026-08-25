@@ -1,0 +1,43 @@
+{
+  "candidates": [
+    {
+      "name": "MOCK: Ordinary Weather",
+      "category": "music",
+      "description": "MOCK: A named song plays from the hallway radio.",
+      "scene_index": 3,
+      "scene_heading": "INT. NOEL'S APARTMENT - LATER",
+      "page": 2,
+      "excerpt": "MOCK: The radio is still going. Ordinary Weather plays.",
+      "usage_note": "MOCK: Named diegetic music cue.",
+      "confidence": "high",
+      "priority": "high",
+      "production_impact": "MOCK: Composition and master-use rights may both be implicated."
+    },
+    {
+      "name": "MOCK: Harbour at Night photograph",
+      "category": "artwork",
+      "description": "MOCK: A framed harbour photograph is featured repeatedly.",
+      "scene_index": 1,
+      "scene_heading": "INT. NOEL'S APARTMENT - NIGHT",
+      "page": 1,
+      "excerpt": "MOCK: On the wall, a framed photograph of a harbour at night.",
+      "usage_note": "MOCK: Featured background artwork.",
+      "confidence": "medium",
+      "priority": "high",
+      "production_impact": "MOCK: The depicted photograph may require reproduction permission."
+    },
+    {
+      "name": "MOCK: The Velvet Room",
+      "category": "signage",
+      "description": "MOCK: A named club and exterior sign appear in the screenplay.",
+      "scene_index": 4,
+      "scene_heading": "EXT. THE VELVET ROOM - NIGHT",
+      "page": 3,
+      "excerpt": "MOCK: The sign buzzes above the club.",
+      "usage_note": "MOCK: Named location and exterior signage.",
+      "confidence": "high",
+      "priority": "medium",
+      "production_impact": "MOCK: Confirm location agreement and signage treatment."
+    }
+  ]
+}

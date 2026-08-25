@@ -5,6 +5,9 @@ import { join } from "node:path";
 import { createApp, type ApiDependencies } from "../src/app";
 import { FilesystemAssetStore } from "../src/repositories/filesystem-asset-store";
 import { MemoryProjectRepository } from "../src/repositories/memory-project-repository";
+import { MemoryMonitorRepository } from "../src/repositories/memory-monitor-repository";
+import { ProjectEventBus } from "../src/services/events";
+import { FixtureGeminiClient, FixtureParallelClient } from "@clearcut/integrations";
 
 export async function createTestApi(overrides: Partial<ApiDependencies> = {}) {
   const root = await mkdtemp(join(tmpdir(), "clearcut-api-"));
@@ -21,8 +24,19 @@ export async function createTestApi(overrides: Partial<ApiDependencies> = {}) {
       maxUploadBytes: 2_000_000,
       mockResearch: true,
       researchConcurrency: 4,
+      googleApiKey: "",
+      geminiModel: "gemini-2.5-flash",
+      parallelApiKey: "",
+      parallelProcessor: "core",
+      parallelMonitorProcessor: "lite",
+      publicBaseUrl: "https://clearcut-api.lcl",
+      webhookSecret: "test-secret",
     },
     jobRunner: { start: () => undefined },
+    gemini: new FixtureGeminiClient(),
+    parallel: new FixtureParallelClient(),
+    monitors: new MemoryMonitorRepository(),
+    events: new ProjectEventBus(),
     ...overrides,
   };
   return { app: createApp(dependencies), repository, assetStore, root };
