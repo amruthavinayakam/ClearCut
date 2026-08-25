@@ -17,6 +17,7 @@ backend/app/static/
 uploads/
 .last_project
 .claude/
+apps/api/.clearcut/
 
 # Generated demo assets are committed on purpose so judges can run the seeded
 # demo without regenerating them. Only the intermediate audio is ignored.
