@@ -4,6 +4,7 @@ import type { ApiConfig } from "./config";
 
 export type JobRunner = {
   start(projectId: string): void | Promise<void>;
+  startRevision?(projectId: string, revisionId: string): void | Promise<void>;
 };
 
 export type ApiDependencies = {

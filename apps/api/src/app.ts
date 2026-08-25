@@ -8,6 +8,7 @@ import { registerDocumentRoutes } from "./routes/documents";
 import { registerItemRoutes } from "./routes/items";
 import { registerPacketRoutes } from "./routes/packets";
 import { registerProjectRoutes } from "./routes/projects";
+import { registerRevisionRoutes } from "./routes/revisions";
 import { registerSystemRoutes } from "./routes/system";
 import { registerUploadRoutes } from "./routes/uploads";
 
@@ -29,5 +30,6 @@ export function createApp(dependencies: ApiDependencies) {
   registerItemRoutes(app, dependencies);
   registerDocumentRoutes(app, dependencies);
   registerPacketRoutes(app, dependencies);
+  registerRevisionRoutes(app, dependencies);
   return app;
 }
