@@ -10,7 +10,7 @@
     "dev": "concurrently -k -n web,api 'bun --filter @clearcut/web dev' 'bun --filter @clearcut/api dev'",
     "typecheck": "bun --filter '*' typecheck",
     "lint": "bun --filter '*' lint",
-    "test": "bun test packages apps",
+    "test": "bun --filter @clearcut/contracts test && bun --filter @clearcut/domain test && bun --filter @clearcut/integrations test && bun --filter @clearcut/api test && bun --filter @clearcut/edge test && bun --filter @clearcut/web test",
     "test:e2e": "bun --filter @clearcut/web test:e2e",
     "build": "bun --filter @clearcut/api build && bun --filter @clearcut/web build",
     "cf:typegen": "bun --filter @clearcut/web cf:typegen && bun --filter @clearcut/edge cf:typegen",
@@ -19,6 +19,6 @@
   "devDependencies": {
     "@types/bun": "^1.4.0",
     "concurrently": "latest",
-    "typescript": "latest"
+    "typescript": "6.x"
   }
 }

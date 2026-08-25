@@ -1,25 +1,25 @@
 # ClearCut
 
-ClearCut is a multimodal clearance-research workspace for film and television. It compares a screenplay with a cut, identifies material that may require clearance, researches candidate rights routes with citations, and gives a human coordinator one continuous place to review evidence, attach production documents, assess recorded scope, track revisions, and export a current research packet.
+ClearCut is a multimodal clearance-research workspace for film and television. It scans a screenplay and rough cut, reconciles page-to-screen changes, researches candidate rights routes with citations, and keeps the evidence, production record, revision history, and human decisions in one auditable workspace.
 
 **Research for human legal review. ClearCut does not issue legal clearance.**
 
 Built for the Agentic Cinema hackathon and the Parallel track.
 
-## The full product flow
+## Product flow
 
-1. **Open or create a production.** The library is the durable starting point, with archive/search support and an honest first-run state.
-2. **Upload the screenplay, the cut, or both.** Files are preflighted before project creation; the browser shows concrete validation and recovery states.
-3. **Watch analysis settle.** Gemini scans the screenplay and video, ClearCut reconciles the page against the screen, and Parallel research runs per case. Timecoded findings remain visible while work is in progress.
-4. **Review every case.** The workspace combines the case queue, picture/timeline, evidence graph, citations, candidate rights holders, gaps, assignment, and human disposition controls.
-5. **Attach the real production record.** Licences, releases, permits, and correspondence are stored as files with recorded media, territory, term, and use metadata. ClearCut compares that metadata with the production's intended-use profile and calls out gaps; it does not interpret a document as a legal conclusion.
-6. **Compare a new version.** A candidate revision is scanned as immutable state. Version Ripple reports `unchanged`, `added`, `removed`, `materially_changed`, and `decision_stale` outcomes. Applying a reviewed revision carries unchanged human records forward and reopens only affected cases.
-7. **Preview and export.** The packet is rebuilt from the active server record, shows incomplete research and document-scope gaps, and requires confirmation before a Markdown download and export audit event are created.
-8. **Continue later.** Deep-linked case selection, filters, search, queue width, open drawer, and playback position survive reload. `Cmd/Ctrl+K` opens the global command palette outside text inputs.
+1. **Create a production.** Upload a screenplay, a rough cut, or both. Each file is preflighted independently, so a valid input is preserved if the other fails.
+2. **Watch the agent pipeline.** Gemini extracts candidates from the page and picture, ClearCut reconciles them, and Parallel Search + Task research every case in parallel.
+3. **Review the evidence.** The workspace joins a case rail, timecoded picture, risk timeline, evidence graph, citations, candidate holders, licensing routes, and open questions.
+4. **Record the human outcome.** Coordinator and counsel actions require an attributable rationale. Approval-like states require a linked production document.
+5. **Attach the production record.** Licences, releases, permits, and correspondence retain media, territory, term, and covered-use metadata. ClearCut compares recorded scope without interpreting legal meaning.
+6. **Run Version Ripple.** Upload a changed script or cut and review `unchanged`, `added`, `removed`, `materially_changed`, and `decision_stale` outcomes before applying the candidate revision.
+7. **Export the packet.** Preview the current server-built research packet, including incomplete work, and explicitly confirm the audited Markdown export.
+8. **Keep watching.** Parallel Monitor can reopen a case when researched public facts change without overwriting prior human history.
 
-The interface is intentionally ultraminimal: editorial type, near-black surfaces, one warm action accent, and semantic colour reserved for evidence state. Desktop, tablet, mobile, keyboard, and reduced-motion paths are covered by browser tests.
+The interface is ultraminimal and technical: Geist Sans/Mono, compact neutral surfaces, graphite picture areas, a single blue action colour, and sparse semantic risk accents. It includes desktop and mobile shells, loading/error/empty states, keyboard navigation, and a `Cmd/Ctrl+K` command palette.
 
-## What the agents do
+## Agent system
 
 ```text
 screenplay ──┐
@@ -28,133 +28,87 @@ rough cut ───┘                                      │
                                                    └─ Parallel Monitor → reopen on change
 ```
 
-- **Gemini screenplay scan** extracts named and generic clearable candidates with source anchors.
-- **Gemini cut scan** reads the actual video, returning timecoded visual/audio candidates and readable on-screen text.
-- **Reconciliation** distinguishes elements found in both inputs from script-only, cut-only, and materially changed uses.
-- **Parallel Search** retrieves public evidence and citations quickly.
-- **Parallel Task** produces a schema-validated dossier with candidate holders, possible licensing routes, evidence gaps, open questions, and recommended human actions.
-- **Parallel Monitor** can watch unresolved public facts; an authenticated webhook reopens the linked case without overwriting its history.
-- **The copilot** can explain the current stored record and invoke live research, but it cannot make a human-owned disposition.
+- **Gemini screenplay scan** extracts named and generic clearable candidates with page and scene anchors.
+- **Gemini cut scan** returns timecoded visual/audio candidates and readable on-screen text.
+- **Reconciliation** distinguishes elements found in both sources from script-only, cut-only, and materially changed uses.
+- **Parallel Search** retrieves public evidence and citations.
+- **Parallel Task** returns a schema-validated dossier with candidate holders, possible contact routes, evidence gaps, and next human actions.
+- **Parallel Monitor** watches unresolved public facts and can reopen a linked case through an authenticated webhook.
+- **ClearCut Copilot** explains the current stored record but cannot make human-owned dispositions.
 
-The principal integration points are in [`parallel_client.py`](backend/app/parallel_client.py), [`pipeline.py`](backend/app/pipeline.py), the agents under [`backend/app/agents`](backend/app/agents), and the webhook in [`main.py`](backend/app/main.py).
+The live clients are in [`packages/integrations/src`](packages/integrations/src), pipeline orchestration is in [`apps/api/src/pipeline`](apps/api/src/pipeline), and the UI flow is under [`apps/web/src`](apps/web/src).
 
 ## Safety model
 
-The workflow enforces ownership at the model and API layers. Agent and system actors may research a case up to `evidence_ready`; they cannot set coordinator, counsel, permission, replacement, or false-positive outcomes. Coordinator and counsel actions require a rationale, and approval-like outcomes require supporting production documents where applicable.
+Agent and system actors may research a case up to `evidence_ready`; they cannot set coordinator, counsel, permission, replacement, or false-positive outcomes. Human actions require a rationale, and document-dependent outcomes require a production record linked to the same case.
 
-Late research cannot overwrite a human disposition. Revision application is predecessor-checked, idempotent, and based on the stored comparison—not a browser-supplied list of changes. Packet previewing creates no audit event; a confirmed export does.
+Late research cannot overwrite a human disposition. Revision application is predecessor-checked and idempotent. Packet previewing creates no audit event; a confirmed export does.
 
-## Architecture
+## Stack
 
-- **Backend:** Python, FastAPI, Pydantic, Google ADK / Gemini, Parallel APIs
-- **Frontend:** React, TypeScript, Vite, local Manrope and Newsreader font packages
-- **Project persistence:** in memory by default; Firestore when `USE_FIRESTORE=true`
-- **Asset persistence:** filesystem under `ASSET_STORAGE_DIR` by default; Google Cloud Storage when `GCS_BUCKET` is set
-- **Production serving:** one FastAPI process serves both `/api` and the built frontend in `backend/app/static`
-- **Live progress:** Server-Sent Events with polling recovery
+- **Web:** Next.js 16 App Router, React 19, TypeScript, Tailwind CSS 4, shadcn/Base UI, Geist Sans and Geist Mono
+- **API:** Bun, Hono, Zod, shared TypeScript contracts
+- **Agents:** Gemini multimodal analysis; Parallel Search, Task, and Monitor
+- **Local persistence:** in-memory project records plus opaque filesystem assets in `.clearcut/assets`
+- **Cloudflare path:** OpenNext Workers for the web, an edge Worker for API routing/direct R2 uploads, D1/R2 repositories, and a Bun API runtime
+- **Live progress:** typed Server-Sent Events with polling recovery
 
-Project records store opaque asset keys rather than process-local paths. In a cloud configuration, set both Firestore and Cloud Storage so metadata, audit history, screenplays, cuts, and attached documents survive instance replacement. Parallel monitor records are currently process-local even when Firestore is enabled.
+The monorepo keeps API schemas in [`packages/contracts`](packages/contracts), invariant-heavy logic in [`packages/domain`](packages/domain), provider clients in [`packages/integrations`](packages/integrations), and reusable UI primitives in [`packages/ui`](packages/ui).
 
 ## Run locally
 
-Prerequisites: Python 3.11+, Node 20+, a Parallel API key, and either Vertex AI Application Default Credentials or a Google AI Studio key.
+Prerequisites: Bun 1.3+, `ffprobe`, and the existing Portless `.lcl` proxy.
 
 ```bash
+bun install
 cp .env.example .env
-python -m venv .venv
-.venv/bin/pip install -r requirements.txt
-cd frontend
-npm install
-npm run build
-cd ..
+MOCK_RESEARCH=true bun run dev
 ```
 
-For Vertex AI:
+Open:
 
-```bash
-gcloud auth application-default login
-```
+- Web: [https://clearcut.lcl](https://clearcut.lcl)
+- API health: [https://clearcut-api.lcl/api/health](https://clearcut-api.lcl/api/health)
 
-Start the built application through Portless:
-
-```bash
-PORTLESS_TLD=lcl portless clearcut --app-port 8080 .venv/bin/python -m uvicorn backend.app.main:app --host 127.0.0.1 --port 8080
-```
-
-Open [https://clearcut.lcl](https://clearcut.lcl).
-
-For frontend development, keep the backend on port 8080 and run:
-
-```bash
-cd frontend
-npm run dev
-```
-
-That frontend is available at [https://clearcut-frontend.lcl](https://clearcut-frontend.lcl) and proxies `/api` to the backend.
+Fixture mode is explicit and every human-facing fixture value is prefixed `MOCK:`. For live analysis, set `GOOGLE_API_KEY` and `PARALLEL_API_KEY`, then run `bun run dev` without `MOCK_RESEARCH=true`.
 
 ## Configuration
 
 | Variable | Default | Purpose |
 |---|---:|---|
-| `GOOGLE_CLOUD_PROJECT` | — | Vertex AI and Google Cloud project ID |
-| `GOOGLE_CLOUD_LOCATION` | `global` | Vertex AI location |
-| `GOOGLE_GENAI_USE_VERTEXAI` | `TRUE` | Use Vertex AI; set `FALSE` for AI Studio |
-| `GOOGLE_API_KEY` | — | AI Studio key when Vertex is disabled |
-| `GEMINI_MODEL` | probe | Optional model pin |
+| `GOOGLE_API_KEY` | — | Google AI Studio key for live Gemini analysis |
+| `GEMINI_MODEL` | `gemini-2.5-flash` | Gemini model used for structured multimodal output |
 | `PARALLEL_API_KEY` | — | Parallel Search, Task, and Monitor key |
-| `PARALLEL_SEARCH_MODE` | `basic` | Search processor mode |
 | `PARALLEL_PROCESSOR` | `core` | Structured Task processor |
-| `PARALLEL_MONITOR_PROCESSOR` | `base` | Monitor processor |
+| `PARALLEL_MONITOR_PROCESSOR` | `lite` | Monitor processor |
 | `RESEARCH_CONCURRENCY` | `16` | Concurrent per-case research jobs |
-| `USE_FIRESTORE` | `false` | Persist project records and audit history |
-| `FIRESTORE_COLLECTION` | `clearance_projects` | Firestore collection |
-| `ASSET_STORAGE_DIR` | system temp | Local asset directory when GCS is unset |
-| `GCS_BUCKET` | — | Store assets in GCS and give Gemini a `gs://` cut URI |
-| `PUBLIC_BASE_URL` | — | Public HTTPS origin used for Monitor webhooks |
-| `PARALLEL_WEBHOOK_SECRET` | — | Required `x-radar-secret` value for webhooks |
-| `MAX_UPLOAD_BYTES` | `209715200` | Server upload ceiling |
-| `MOCK_RESEARCH` | `false` | Explicit local fixture research mode |
-
-`MOCK_RESEARCH=true` is a development aid; its fixture values are deliberately prefixed `MOCK:`. It is not used to turn browser-test output into a product claim.
+| `MOCK_RESEARCH` | `false` | Use deterministic fixture integrations instead of live providers |
+| `ASSET_STORAGE_DIR` | `.clearcut/assets` | Local opaque asset store |
+| `FFPROBE_PATH` | `ffprobe` | Media probe binary |
+| `MAX_UPLOAD_BYTES` | `209715200` | API upload ceiling |
+| `PUBLIC_BASE_URL` | — | Public origin used for Parallel webhook delivery |
+| `PARALLEL_WEBHOOK_SECRET` | — | Required webhook secret |
+| `CLEARCUT_API_ORIGIN` | `https://clearcut-api.lcl` | Development rewrite target used by Next.js |
 
 ## Verification
 
-Install Playwright's pinned Chromium once:
-
 ```bash
-cd frontend
-npx playwright install chromium
+bun run test
+bun run typecheck
+bun run lint
+bun run build
 ```
 
-Run the release gate:
-
-```bash
-.venv/bin/pytest backend/tests -q
-.venv/bin/python -m backend.tests.test_offline
-cd frontend
-npm test
-npm run build
-npm run test:e2e
-```
-
-Then verify the running server:
-
-```bash
-curl -sk https://clearcut.lcl/api/health
-```
-
-The Playwright suite covers creation through review, document scope gaps, immutable revision application, confirmed packet export/audit, reload continuity, keyboard commands, reduced motion, serious/critical accessibility violations, focus restoration/trapping, responsive overflow, local font loading, settled motion, and visual baselines for boot, empty/returning library, intake, processing, review, partial scope, revision comparison, packet, tablet, and mobile states.
-
-Browser E2E tests intercept only root `/api` requests with deterministic route fixtures. They use no live credentials, do not ship a mock API inside the product, and assert the same state transitions the UI consumes from FastAPI. Backend integration and invariant tests exercise the real server code.
+The automated suites cover shared contracts, status ownership, recorded document scope, immutable revisions, packet idempotency, provider validation, API lifecycle and security, Cloudflare routing, and the main Next.js product surfaces. The running application is additionally browser-verified through intake, review, citations, monitored cases, packet export, Version Ripple, and mobile layout.
 
 ## Limits
 
 - ClearCut supports clearance research; it is not legal advice and does not determine whether a use is lawful.
 - Detection produces candidates, not a guarantee of exhaustive trademark, copyright, music, privacy, or publicity-rights identification.
-- Candidate rights holders and licensing routes come from public research and must be confirmed by a qualified human.
-- Scope assessment compares recorded metadata; it does not parse legal meaning from the attached document.
+- Candidate rights holders and contact routes come from public research and must be confirmed by a qualified human.
+- Scope assessment compares recorded metadata; it does not parse legal meaning from an attached document.
 - Scanned screenplay PDFs need a usable text layer or OCR before upload.
-- Without Firestore and GCS, local state and assets are suitable for development, not durable deployment.
+- The default local repository is intentionally non-durable; use the Cloudflare D1/R2 adapters for production persistence.
 
 ## License
 

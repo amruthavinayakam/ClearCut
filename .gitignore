@@ -13,6 +13,7 @@ frontend/dist/
 backend/app/static/
 .DS_Store
 *.egg-info/
+*.tsbuildinfo
 .pytest_cache/
 uploads/
 .last_project
