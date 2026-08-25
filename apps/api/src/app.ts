@@ -4,6 +4,9 @@ import type { ApiDependencies, ClearCutEnv } from "./context";
 import { errorResponse } from "./middleware/errors";
 import { requestId } from "./middleware/request-id";
 import { registerAssetRoutes } from "./routes/assets";
+import { registerDocumentRoutes } from "./routes/documents";
+import { registerItemRoutes } from "./routes/items";
+import { registerPacketRoutes } from "./routes/packets";
 import { registerProjectRoutes } from "./routes/projects";
 import { registerSystemRoutes } from "./routes/system";
 import { registerUploadRoutes } from "./routes/uploads";
@@ -23,5 +26,8 @@ export function createApp(dependencies: ApiDependencies) {
   registerUploadRoutes(app, dependencies);
   registerProjectRoutes(app, dependencies);
   registerAssetRoutes(app, dependencies);
+  registerItemRoutes(app, dependencies);
+  registerDocumentRoutes(app, dependencies);
+  registerPacketRoutes(app, dependencies);
   return app;
 }

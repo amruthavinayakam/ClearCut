@@ -1,10 +1,13 @@
 import { z } from "zod";
 
 import {
+  ActorSchema,
+  IntendedUseProfileSchema,
   MonitorRecordSchema,
   ProjectListItemSchema,
   ProjectRevisionSchema,
   ProjectSchema,
+  WorkflowStatusSchema,
 } from "./project";
 
 export const ApiErrorSchema = z.object({
@@ -62,7 +65,40 @@ export const MonitorListSchema = z.object({
 
 export const HealthSchema = z.object({ status: z.literal("ok") }).strict();
 
+export const StatusChangeSchema = z.object({
+  status: WorkflowStatusSchema,
+  actor: ActorSchema.default("coordinator"),
+  actor_name: z.string().max(80).default(""),
+  rationale: z.string().min(1).max(1_000),
+  document_ids: z.array(z.string()).default([]),
+}).strict();
+
+export const CoordinationChangeSchema = z.object({
+  assigned_to: z.string().max(80),
+}).strict();
+
+export const UseProfileChangeSchema = IntendedUseProfileSchema;
+
+export const DocumentMetadataPatchSchema = z.object({
+  kind: z.enum(["release", "license", "permit", "correspondence", "other"]).optional(),
+  title: z.string().max(200).optional(),
+  notes: z.string().max(4_000).optional(),
+  covers_territory: z.string().max(500).optional(),
+  covers_term: z.string().max(500).optional(),
+  covers_media: z.string().max(500).optional(),
+  media: z.array(z.string()).optional(),
+  territories: z.array(z.string()).optional(),
+  starts_on: z.string().nullable().optional(),
+  ends_on: z.string().nullable().optional(),
+  perpetual: z.boolean().optional(),
+  covered_use: z.string().max(2_000).optional(),
+  attached_by: z.string().max(80).optional(),
+}).strict();
+
 export type ApiError = z.infer<typeof ApiErrorSchema>;
 export type PreflightResult = z.infer<typeof PreflightResultSchema>;
 export type AppConfig = z.infer<typeof AppConfigSchema>;
 export type RevisionApplyResult = z.infer<typeof RevisionApplyResultSchema>;
+export type StatusChange = z.infer<typeof StatusChangeSchema>;
+export type CoordinationChange = z.infer<typeof CoordinationChangeSchema>;
+export type DocumentMetadataPatch = z.infer<typeof DocumentMetadataPatchSchema>;

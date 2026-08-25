@@ -2,6 +2,8 @@ import type { Context } from "hono";
 import type { ContentfulStatusCode } from "hono/utils/http-status";
 import { ZodError } from "zod";
 
+import { DomainError } from "@clearcut/domain";
+
 import { AssetStoreError } from "../repositories/asset-store";
 import { RepositoryError } from "../repositories/project-repository";
 import type { ClearCutEnv } from "../context";
@@ -34,6 +36,14 @@ export function errorResponse(error: unknown, context: Context<ClearCutEnv>) {
   }
   if (error instanceof AssetStoreError) {
     const status = error.code === "asset_not_found" ? 404 : error.code === "invalid_asset_range" ? 416 : 400;
+    return context.json({ code: error.code, message: error.message, request_id: requestId }, status);
+  }
+  if (error instanceof DomainError) {
+    const status: ContentfulStatusCode = error.code === "human_owned_status"
+      ? 403
+      : error.code === "revision_conflict"
+        ? 409
+        : 422;
     return context.json({ code: error.code, message: error.message, request_id: requestId }, status);
   }
   if (error instanceof ZodError) {
