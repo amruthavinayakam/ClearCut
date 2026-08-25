@@ -279,7 +279,7 @@ export const ProjectSchema = z.object({
   audit_events: z.array(AuditEventSchema),
   activity_events: z.array(ActivityEventSchema),
   use_profile: IntendedUseProfileSchema,
-  revisions: z.array(ProjectRevisionSchema).optional(),
+  revisions: z.array(ProjectRevisionSchema).default([]),
   active_revision_id: z.string().nullable(),
   summary: ProjectSummarySchema,
 }).strict();

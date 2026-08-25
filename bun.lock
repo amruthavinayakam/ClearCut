@@ -17,9 +17,18 @@
         "zod": "^4.4.3",
       },
     },
+    "packages/domain": {
+      "name": "@clearcut/domain",
+      "version": "0.1.0",
+      "dependencies": {
+        "@clearcut/contracts": "workspace:*",
+      },
+    },
   },
   "packages": {
     "@clearcut/contracts": ["@clearcut/contracts@workspace:packages/contracts"],
+
+    "@clearcut/domain": ["@clearcut/domain@workspace:packages/domain"],
 
     "@types/bun": ["@types/bun@1.4.0", "", { "dependencies": { "bun-types": "1.4.0" } }, "sha512-K+lZULY23vRgK/CfTjFIV+tyifaNdSMlPh9j+6mQ/cLfpOznLyAuzgV/JQysyECpkBQLVMSyvjlr2fBUSA9wFQ=="],
 
