@@ -15,6 +15,8 @@ export type ApiConfig = {
   parallelMonitorProcessor: string;
   publicBaseUrl: string;
   webhookSecret: string;
+  cloudflareBindingOrigin: string;
+  cloudflareBindingNonce: string;
 };
 
 function positiveInteger(value: string | undefined, fallback: number): number {
@@ -38,5 +40,7 @@ export function readConfig(env: Record<string, string | undefined> = process.env
     parallelMonitorProcessor: env.PARALLEL_MONITOR_PROCESSOR?.trim() ?? "lite",
     publicBaseUrl: env.PUBLIC_BASE_URL?.trim() ?? "",
     webhookSecret: env.PARALLEL_WEBHOOK_SECRET?.trim() ?? "",
+    cloudflareBindingOrigin: env.CLOUDFLARE_BINDING_ORIGIN?.trim() ?? "",
+    cloudflareBindingNonce: env.CLOUDFLARE_BINDING_NONCE?.trim() ?? "",
   };
 }

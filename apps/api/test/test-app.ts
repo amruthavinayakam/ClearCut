@@ -31,6 +31,8 @@ export async function createTestApi(overrides: Partial<ApiDependencies> = {}) {
       parallelMonitorProcessor: "lite",
       publicBaseUrl: "https://clearcut-api.lcl",
       webhookSecret: "test-secret",
+      cloudflareBindingOrigin: "",
+      cloudflareBindingNonce: "",
     },
     jobRunner: { start: () => undefined },
     gemini: new FixtureGeminiClient(),

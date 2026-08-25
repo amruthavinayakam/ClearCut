@@ -6,10 +6,16 @@ import { MemoryMonitorRepository } from "./repositories/memory-monitor-repositor
 import { ProjectEventBus } from "./services/events";
 import { FixtureGeminiClient, FixtureParallelClient, LiveGeminiClient, LiveParallelClient } from "@clearcut/integrations";
 import { ProjectOrchestrator } from "./pipeline/orchestrator";
+import { CloudflareBindingClient } from "./repositories/cloudflare-binding-client";
+import { D1ProjectRepository } from "./repositories/d1-project-repository";
+import { R2AssetStore } from "./repositories/r2-asset-store";
 
 const config = readConfig();
-const repository = new MemoryProjectRepository();
-const assetStore = new FilesystemAssetStore(config.assetStorageDir);
+const bindingClient = config.cloudflareBindingOrigin
+  ? new CloudflareBindingClient({ origin: config.cloudflareBindingOrigin, nonce: config.cloudflareBindingNonce })
+  : null;
+const repository = bindingClient ? new D1ProjectRepository(bindingClient) : new MemoryProjectRepository();
+const assetStore = bindingClient ? new R2AssetStore(bindingClient) : new FilesystemAssetStore(config.assetStorageDir);
 const monitors = new MemoryMonitorRepository();
 const events = new ProjectEventBus();
 const gemini = config.mockResearch

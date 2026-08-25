@@ -63,6 +63,69 @@ export const MonitorListSchema = z.object({
   monitors: z.array(MonitorRecordSchema),
 }).strict();
 
+export const UploadedAssetSchema = z.object({
+  key: z.string(),
+  filename: z.string(),
+  content_type: z.string(),
+  size_bytes: z.number().int().positive(),
+  etag: z.string().nullable(),
+}).strict();
+
+export const UploadSessionCreateSchema = z.object({
+  project_id: z.string().min(1),
+  kind: z.enum(["script", "cut", "document"]),
+  filename: z.string().min(1).max(255),
+  size_bytes: z.number().int().positive(),
+  content_type: z.string().min(1).max(200),
+}).strict();
+
+export const UploadSessionSchema = UploadSessionCreateSchema.extend({
+  session_id: z.string(),
+  key: z.string(),
+  expires_at: z.string(),
+  completed_at: z.string().nullable(),
+  etag: z.string().nullable(),
+  multipart_upload_id: z.string().nullable(),
+  upload_url: z.string().url().nullable(),
+  multipart: z.object({
+    upload_id: z.string().nullable(),
+    part_size: z.number().int().positive(),
+    part_count: z.number().int().positive().max(10_000),
+    parts: z.array(z.object({
+      part_number: z.number().int().positive(),
+      upload_url: z.string().url(),
+    }).strict()),
+  }).strict().nullable(),
+}).strict();
+
+export const UploadFinalizeSchema = z.object({
+  parts: z.array(z.object({
+    part_number: z.number().int().positive(),
+    etag: z.string().min(1),
+  }).strict()).default([]),
+}).strict();
+
+export const UploadFinalizeResultSchema = z.object({
+  session_id: z.string(),
+  completed_at: z.string(),
+  asset: UploadedAssetSchema,
+}).strict();
+
+export const StoredUploadReferenceSchema = UploadedAssetSchema.extend({
+  etag: z.string(),
+}).strict();
+
+export const CloudProjectCreateSchema = z.object({
+  project_id: z.string().startsWith("proj_"),
+  title: z.string().max(200).default("Untitled production"),
+  script_asset: StoredUploadReferenceSchema.nullable().default(null),
+  script_details: z.record(z.string(), z.unknown()).nullable().default(null),
+  cut_asset: StoredUploadReferenceSchema.nullable().default(null),
+  cut_details: z.record(z.string(), z.unknown()).nullable().default(null),
+}).strict().refine((input) => input.script_asset || input.cut_asset, {
+  message: "A screenplay or cut asset is required.",
+});
+
 export const HealthSchema = z.object({ status: z.literal("ok") }).strict();
 
 export const StatusChangeSchema = z.object({
@@ -102,3 +165,10 @@ export type RevisionApplyResult = z.infer<typeof RevisionApplyResultSchema>;
 export type StatusChange = z.infer<typeof StatusChangeSchema>;
 export type CoordinationChange = z.infer<typeof CoordinationChangeSchema>;
 export type DocumentMetadataPatch = z.infer<typeof DocumentMetadataPatchSchema>;
+export type UploadedAsset = z.infer<typeof UploadedAssetSchema>;
+export type UploadSessionCreate = z.infer<typeof UploadSessionCreateSchema>;
+export type UploadSession = z.infer<typeof UploadSessionSchema>;
+export type UploadFinalize = z.infer<typeof UploadFinalizeSchema>;
+export type UploadFinalizeResult = z.infer<typeof UploadFinalizeResultSchema>;
+export type StoredUploadReference = z.infer<typeof StoredUploadReferenceSchema>;
+export type CloudProjectCreate = z.infer<typeof CloudProjectCreateSchema>;

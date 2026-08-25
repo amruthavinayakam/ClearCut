@@ -80,4 +80,38 @@ describe("project lifecycle", () => {
     expect(await response.text()).toBe("2345");
     expect(response.headers.get("content-range")).toBe("bytes 2-5/10");
   });
+
+  test("completed direct uploads are scope and metadata checked before project creation", async () => {
+    const { app, repository, assetStore } = await createTestApi();
+    const projectId = "proj_direct";
+    const blob = new Blob(["Title: Direct\n\nINT. ROOM - DAY\nA painting hangs."]);
+    const stored = await assetStore.put(blob.stream(), {
+      key: `uploads/${projectId}/script/opaque.fountain`,
+      filename: "direct.fountain",
+      contentType: "text/plain",
+      sizeBytes: blob.size,
+    });
+    const create = (key = stored.key) => app.request("/api/projects/from-assets", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({
+        project_id: projectId,
+        title: "Direct",
+        script_asset: {
+          key,
+          filename: stored.filename,
+          content_type: stored.contentType,
+          size_bytes: stored.sizeBytes,
+          etag: stored.etag,
+        },
+        script_details: { title: "Direct", page_count: 1, scene_count: 1 },
+      }),
+    });
+    const rejected = await create("uploads/another-project/script/opaque.fountain");
+    const accepted = await create();
+
+    expect(rejected.status).toBe(403);
+    expect(accepted.status).toBe(201);
+    expect((await repository.require(projectId)).script?.storage_key).toBe(stored.key);
+  });
 });

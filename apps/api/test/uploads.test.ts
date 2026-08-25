@@ -40,6 +40,8 @@ describe("upload preflight", () => {
         parallelMonitorProcessor: "lite",
         publicBaseUrl: "",
         webhookSecret: "test-secret",
+        cloudflareBindingOrigin: "",
+        cloudflareBindingNonce: "",
       },
     });
     const unsupported = await preflight(app, new File(["bad"], "rights.exe"));

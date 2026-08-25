@@ -2,6 +2,7 @@ import { extname } from "node:path";
 
 import type { Hono } from "hono";
 import { z } from "zod";
+import { CloudProjectCreateSchema } from "@clearcut/contracts";
 
 import type { ApiDependencies, ClearCutEnv } from "../context";
 import { ApiProblem } from "../middleware/errors";
@@ -28,6 +29,36 @@ async function storeFile(
 }
 
 export function registerProjectRoutes(app: Hono<ClearCutEnv>, dependencies: ApiDependencies) {
+  app.post("/api/projects/from-assets", async (context) => {
+    const input = CloudProjectCreateSchema.parse(await context.req.json());
+    const verify = async (kind: "script" | "cut", reference: NonNullable<typeof input.script_asset>) => {
+      const prefix = `uploads/${input.project_id}/${kind}/`;
+      if (!reference.key.startsWith(prefix)) {
+        throw new ApiProblem(403, "upload_scope_mismatch", "The uploaded asset is outside this project scope.");
+      }
+      const stored = await dependencies.assetStore.stat(reference.key);
+      if (stored.sizeBytes !== reference.size_bytes || stored.etag !== reference.etag || stored.contentType !== reference.content_type) {
+        throw new ApiProblem(409, "upload_verification_failed", "The uploaded asset metadata no longer matches the completed session.");
+      }
+      return stored;
+    };
+    const [scriptAsset, cutAsset] = await Promise.all([
+      input.script_asset ? verify("script", input.script_asset) : null,
+      input.cut_asset ? verify("cut", input.cut_asset) : null,
+    ]);
+    const project = createProjectRecord({
+      id: input.project_id,
+      title: input.title,
+      scriptAsset,
+      scriptDetails: input.script_details,
+      cutAsset,
+      cutDetails: input.cut_details,
+    });
+    const saved = await dependencies.repository.save(project);
+    queueMicrotask(() => void Promise.resolve(dependencies.jobRunner.start(saved.id)).catch(() => undefined));
+    return context.json(withSummary(saved), 201);
+  });
+
   app.post("/api/projects", async (context) => {
     const body = await context.req.parseBody();
     const script = body.script instanceof File ? body.script : null;
