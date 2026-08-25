@@ -13,6 +13,8 @@
   "dependencies": {
     "@clearcut/contracts": "workspace:*",
     "@clearcut/domain": "workspace:*",
-    "pdfjs-dist": "^6.2.108"
+    "hono": "latest",
+    "pdfjs-dist": "^6.2.108",
+    "zod": "^4.4.3"
   }
 }
