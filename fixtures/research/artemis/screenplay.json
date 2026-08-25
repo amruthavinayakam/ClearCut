@@ -1,0 +1,95 @@
+{
+  "candidates": [
+    {
+      "name": "NASA insignia",
+      "category": "brand",
+      "description": "NASA’s protected agency insignia appears on hardware, screens, apparel, and the closing card.",
+      "scene_index": 1,
+      "scene_heading": "EXT. THE MOON — ARCHIVAL MONTAGE",
+      "page": 1,
+      "excerpt": "NASA archival footage follows: the Space Launch System, Orion, agency identifiers, and workers preparing the launch vehicle.",
+      "usage_note": "Repeated agency identifier within sourced footage and graphics.",
+      "confidence": "high",
+      "priority": "high",
+      "production_impact": "Confirm that the intended factual use follows NASA identifier and non-endorsement guidance."
+    },
+    {
+      "name": "Artemis mission identity",
+      "category": "brand",
+      "description": "The Artemis wordmark and mission identity bookend the recap and appear throughout the launch material.",
+      "scene_index": 1,
+      "scene_heading": "EXT. THE MOON — ARCHIVAL MONTAGE",
+      "page": 1,
+      "excerpt": "The ARTEMIS mission identity resolves over the lunar surface.",
+      "usage_note": "Featured mission identifier in opening and closing graphics.",
+      "confidence": "high",
+      "priority": "high",
+      "production_impact": "Treat the mission identity separately from the underlying government footage."
+    },
+    {
+      "name": "Launch Pad 39B",
+      "category": "location",
+      "description": "NASA’s launch complex and Kennedy Space Center facilities are named and prominently depicted.",
+      "scene_index": 2,
+      "scene_heading": "EXT. LAUNCH PAD 39B — NIGHT",
+      "page": 1,
+      "excerpt": "The Space Launch System and Orion spacecraft stand live on Launch Pad 39B at NASA's Kennedy Space Center.",
+      "usage_note": "Named federal facility shown through NASA-supplied archival material.",
+      "confidence": "high",
+      "priority": "medium",
+      "production_impact": "Distinguish use of existing public footage from a request to film on NASA property."
+    },
+    {
+      "name": "NASA Artemis I launch footage",
+      "category": "archival",
+      "description": "The rough cut incorporates NASA-produced launch, mission-control, spacecraft, and animation footage.",
+      "scene_index": 4,
+      "scene_heading": "EXT. LAUNCH PAD 39B — CONTINUOUS",
+      "page": 2,
+      "excerpt": "NASA launch footage follows the rocket away from the pad and into the night sky.",
+      "usage_note": "Substantial use of a specific NASA Image and Video Library asset.",
+      "confidence": "high",
+      "priority": "high",
+      "production_impact": "Record the exact source asset, attribution, intended use, and any third-party notices."
+    },
+    {
+      "name": "Bill Nelson",
+      "category": "real_person",
+      "description": "Bill Nelson appears on camera and is identified by name and former NASA title.",
+      "scene_index": 5,
+      "scene_heading": "INT. NASA PRESENTATION STAGE — NIGHT",
+      "page": 2,
+      "excerpt": "BILL NELSON, identified on screen as NASA Administrator, speaks at a podium.",
+      "usage_note": "Identifiable person, voice, name, and official title.",
+      "confidence": "high",
+      "priority": "high",
+      "production_impact": "Commercial or promotional reuse may require separate privacy/publicity review."
+    },
+    {
+      "name": "European Space Agency",
+      "category": "organization",
+      "description": "The European Service Module is named and depicted as part of Orion.",
+      "scene_index": 6,
+      "scene_heading": "EXT. SPACE — ORION ARCHIVAL FOOTAGE",
+      "page": 2,
+      "excerpt": "Orion flies above Earth and the Moon. The European Service Module is named and shown as part of the spacecraft.",
+      "usage_note": "Named international agency contribution and spacecraft hardware.",
+      "confidence": "high",
+      "priority": "medium",
+      "production_impact": "Confirm attribution and whether any ESA-supplied material carries separate terms."
+    },
+    {
+      "name": "Mission score",
+      "category": "music",
+      "description": "A continuous documentary score is called for beneath narration and broadcast audio.",
+      "scene_index": 3,
+      "scene_heading": "INT. LAUNCH CONTROL CENTER — NIGHT",
+      "page": 1,
+      "excerpt": "A musical score continues beneath the official broadcast audio.",
+      "usage_note": "Generic score cue; the exact composition and recording are not identified in the captions.",
+      "confidence": "medium",
+      "priority": "high",
+      "production_impact": "Obtain a cue sheet or confirmation that the soundtrack is included in the reusable NASA asset."
+    }
+  ]
+}

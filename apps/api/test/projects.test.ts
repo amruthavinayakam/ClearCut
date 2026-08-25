@@ -5,6 +5,24 @@ import { ApiErrorSchema, ProjectListSchema, ProjectSchema } from "@clearcut/cont
 import { createTestApi } from "./test-app";
 
 describe("project lifecycle", () => {
+  test("real sample creates the official Artemis media pair through the standard project path", async () => {
+    const { app, repository, assetStore } = await createTestApi({
+      config: { maxUploadBytes: 20_000_000 },
+    });
+    const response = await app.request("/api/projects/sample", { method: "POST" });
+    const project = ProjectSchema.parse(await response.json());
+    const storedCut = await assetStore.stat(project.cut!.storage_key);
+
+    expect(response.status).toBe(201);
+    expect(project.title).toBe("Artemis I — Launch to the Moon");
+    expect(project.script?.filename).toBe("artemis-i-recap.fountain");
+    expect(project.cut?.filename).toBe("artemis-i-launch-recap.mp4");
+    expect(project.cut?.duration_s).toBeGreaterThan(150);
+    expect(project.cut?.duration_s).toBeLessThan(154);
+    expect(storedCut.sizeBytes).toBeGreaterThan(12_000_000);
+    expect((await repository.require(project.id)).cut?.storage_key).toBe(storedCut.key);
+  });
+
   test("creation persists asset metadata before analysis starts", async () => {
     const { app, repository } = await createTestApi();
     const body = new FormData();

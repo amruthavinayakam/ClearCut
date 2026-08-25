@@ -23,6 +23,67 @@ const item = {
 } as unknown as ClearanceItem;
 
 describe("fixture integrations", () => {
+  test("scans the Artemis real sample without mock-labeled findings", async () => {
+    const gemini = new FixtureGeminiClient();
+    const productionTitle = "Artemis I — Launch to the Moon";
+    const script = await gemini.scanScreenplay({
+      productionTitle,
+      sourceVersion: "script-v1",
+      scenes: [],
+    });
+    const cut = await gemini.scanCut({
+      productionTitle,
+      sourceVersion: "cut-v1",
+      durationSeconds: 152,
+      mimeType: "video/mp4",
+      bytes: new Uint8Array(),
+      screenplayDigest: "",
+    });
+    expect(script.candidates.map((candidate) => candidate.name)).toContain("NASA insignia");
+    expect(cut.detections.map((detection) => detection.name)).toContain("NASA insignia");
+    expect(cut.detections.every((detection) => detection.end_seconds <= 152)).toBe(true);
+    expect([...script.candidates, ...cut.detections].every((candidate) => !candidate.name.includes("MOCK:"))).toBe(true);
+  });
+
+  test("researches Artemis sample cases from official public sources", async () => {
+    const parallel = new FixtureParallelClient();
+    const productionTitle = "Artemis I — Launch to the Moon";
+    const sampleItem = { ...item, name: "NASA insignia", category: "brand" } as ClearanceItem;
+    const sources = await parallel.searchClearanceItem(sampleItem, productionTitle, "project-artemis");
+    const dossier = await parallel.buildDossier(sampleItem, productionTitle, sources);
+
+    expect(sources.some((source) => new URL(source.url).hostname === "www.nasa.gov")).toBe(true);
+    expect(dossier.research_summary).not.toContain("MOCK:");
+    expect(dossier.licensing_routes.some((route) => route.contact?.includes("agency-brand@nasa.gov"))).toBe(true);
+  });
+
+  test("keeps verified research selected after screenplay title normalization", async () => {
+    const parallel = new FixtureParallelClient();
+    const sampleItem = { ...item, name: "NASA insignia", category: "brand" } as ClearanceItem;
+    const sources = await parallel.searchClearanceItem(
+      sampleItem,
+      "ARTEMIS I — LAUNCH TO THE MOON",
+      "project-artemis-uppercase",
+    );
+
+    expect(sources.some((source) => new URL(source.url).hostname === "www.nasa.gov")).toBe(true);
+    expect(sources.every((source) => !source.title?.includes("MOCK:"))).toBe(true);
+  });
+
+  test("keeps sample copilot and monitoring grounded without mock labels", async () => {
+    const gemini = new FixtureGeminiClient();
+    const parallel = new FixtureParallelClient();
+    const productionTitle = "Artemis I — Launch to the Moon";
+    const project = { id: "project-artemis", title: productionTitle, items: [item] } as Project;
+    const answer = await gemini.answerCopilot({ project, question: "What remains open?" });
+    const monitor = await parallel.createMonitor(item, productionTitle, project.id, "daily");
+    const events = await parallel.readMonitorEvents(monitor.monitor_id);
+
+    expect(answer.answer).not.toContain("MOCK:");
+    expect(monitor.query).not.toContain("MOCK:");
+    expect(events.every((event) => !event.content?.includes("MOCK:"))).toBe(true);
+  });
+
   test("clearly mark every human-facing result as mock data", async () => {
     const gemini = new FixtureGeminiClient();
     const parallel = new FixtureParallelClient();

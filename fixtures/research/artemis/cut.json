@@ -1,0 +1,101 @@
+{
+  "notes": "Verified timecoded observations from NASA’s official 151.57-second Artemis I recap.",
+  "detections": [
+    {
+      "name": "NASA insignia",
+      "category": "brand",
+      "description": "NASA identifiers appear on hardware, apparel, presentation graphics, control-room displays, and the final card.",
+      "start_seconds": 6.2,
+      "end_seconds": 151.5,
+      "representative_seconds": 149.2,
+      "modality": "visual",
+      "observation": "The closing NASA insignia is full-frame; additional smaller marks recur throughout.",
+      "readable_text": "NASA",
+      "confidence": "high"
+    },
+    {
+      "name": "Artemis mission identity",
+      "category": "brand",
+      "description": "The Artemis identity appears over the Moon at the opening and as a featured end card.",
+      "start_seconds": 0.0,
+      "end_seconds": 146.8,
+      "representative_seconds": 145.0,
+      "modality": "visual",
+      "observation": "A designed Artemis wordmark and trajectory symbol fill the frame.",
+      "readable_text": "ARTEMIS",
+      "confidence": "high"
+    },
+    {
+      "name": "Launch Pad 39B",
+      "category": "location",
+      "description": "The launch complex, visitor viewing area, and control facilities at Kennedy Space Center are shown and named.",
+      "start_seconds": 14.7,
+      "end_seconds": 84.5,
+      "representative_seconds": 41.0,
+      "modality": "both",
+      "observation": "The narration names Launch Pad 39B while the SLS stack and launch infrastructure are featured.",
+      "readable_text": "Launch Pad 39B",
+      "confidence": "high"
+    },
+    {
+      "name": "NASA Artemis I launch footage",
+      "category": "archival",
+      "description": "The complete cut is a NASA-produced recap combining launch, crowd, control-room, spacecraft, and animation material.",
+      "start_seconds": 0.0,
+      "end_seconds": 151.5,
+      "representative_seconds": 65.0,
+      "modality": "both",
+      "observation": "The source is the named NASA Image and Video Library recap rather than production-originated footage.",
+      "readable_text": "Artemis I",
+      "confidence": "high"
+    },
+    {
+      "name": "Bill Nelson",
+      "category": "real_person",
+      "description": "Bill Nelson appears in a sustained podium shot and is identified by a lower-third title.",
+      "start_seconds": 101.0,
+      "end_seconds": 119.8,
+      "representative_seconds": 109.0,
+      "modality": "both",
+      "observation": "Nelson’s face, voice, name, and NASA title are clear and central.",
+      "readable_text": "BILL NELSON — NASA ADMINISTRATOR",
+      "confidence": "high"
+    },
+    {
+      "name": "European Space Agency",
+      "category": "organization",
+      "description": "The narration names the European Service Module while Orion is shown in flight.",
+      "start_seconds": 114.0,
+      "end_seconds": 132.0,
+      "representative_seconds": 122.0,
+      "modality": "both",
+      "observation": "The ESA-provided service module is an explicit subject of the narration and spacecraft imagery.",
+      "readable_text": "European Service Module",
+      "confidence": "high"
+    },
+    {
+      "name": "Unidentified musical score",
+      "category": "music",
+      "description": "A cinematic score plays continuously under narration, mission audio, and launch footage.",
+      "start_seconds": 0.0,
+      "end_seconds": 151.5,
+      "representative_seconds": 88.0,
+      "modality": "audio",
+      "observation": "The recording is prominent but the official captions and public catalog metadata do not identify a title, composer, or label.",
+      "readable_text": "",
+      "confidence": "high"
+    },
+    {
+      "name": "Kennedy Space Center visitor signage",
+      "category": "signage",
+      "description": "Space Center visitor-area signage and branded apparel are visible among the launch crowd.",
+      "start_seconds": 21.5,
+      "end_seconds": 28.8,
+      "representative_seconds": 24.4,
+      "modality": "visual",
+      "observation": "A large Space Center sign and NASA-branded clothing are readable in a crowd shot.",
+      "readable_text": "Space Center / NASA",
+      "confidence": "high"
+    }
+  ]
+}

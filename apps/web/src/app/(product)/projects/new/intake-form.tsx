@@ -1,6 +1,6 @@
 "use client";
 
-import { ArrowRight, ShieldCheck } from "lucide-react";
+import { ArrowRight, Play, ShieldCheck } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
 
@@ -21,6 +21,7 @@ export function IntakeForm({ client = browserUploadClient }: { client?: UploadCl
   const [cut, setCut] = useState<IntakeFileState>(emptyFile);
   const [progress, setProgress] = useState(0);
   const [submitting, setSubmitting] = useState(false);
+  const [sampleRunning, setSampleRunning] = useState(false);
   const [submitError, setSubmitError] = useState<string | null>(null);
 
   const choose = async (kind: "screenplay" | "cut", file: File) => {
@@ -48,7 +49,7 @@ export function IntakeForm({ client = browserUploadClient }: { client?: UploadCl
 
   const validScreenplay = screenplay.status === "ready" ? screenplay.file : null;
   const validCut = cut.status === "ready" ? cut.file : null;
-  const canSubmit = Boolean(validScreenplay || validCut) && !submitting;
+  const canSubmit = Boolean(validScreenplay || validCut) && !submitting && !sampleRunning;
 
   const submit = async (event: React.FormEvent) => {
     event.preventDefault();
@@ -65,6 +66,19 @@ export function IntakeForm({ client = browserUploadClient }: { client?: UploadCl
     }
   };
 
+  const runSample = async () => {
+    if (submitting || sampleRunning) return;
+    setSubmitError(null);
+    setSampleRunning(true);
+    try {
+      const project = await client.createSampleProject();
+      router.push(`/projects/${project.id}`);
+    } catch (error) {
+      setSubmitError(error instanceof ApiClientError || error instanceof Error ? error.message : "The real sample could not be started.");
+      setSampleRunning(false);
+    }
+  };
+
   return (
     <form className="border-y border-border" onSubmit={submit}>
       <div className="grid gap-2 border-b border-border p-4 sm:grid-cols-[180px_1fr] sm:items-center">
@@ -77,9 +91,14 @@ export function IntakeForm({ client = browserUploadClient }: { client?: UploadCl
       </div>
       <div className="flex flex-col gap-4 border-t border-border p-4 sm:flex-row sm:items-center sm:justify-between">
         <div className="flex max-w-xl items-start gap-2 text-[11px] leading-5 text-muted-foreground"><ShieldCheck className="mt-0.5 size-3.5 shrink-0" /><span>ClearCut identifies candidates and assembles cited research. A qualified human owns every clearance decision.</span></div>
-        <Button className="min-w-[184px]" disabled={!canSubmit} type="submit">
-          {submitting ? `Uploading ${progress}%` : "Start clearance analysis"}<ArrowRight />
-        </Button>
+        <div className="flex shrink-0 items-center gap-1">
+          <Button disabled={submitting || sampleRunning} onClick={() => void runSample()} type="button" variant="ghost">
+            {sampleRunning ? "Preparing real sample" : "Run real sample"}<Play />
+          </Button>
+          <Button className="min-w-[184px]" disabled={!canSubmit} type="submit">
+            {submitting ? `Uploading ${progress}%` : "Start clearance analysis"}<ArrowRight />
+          </Button>
+        </div>
       </div>
       {submitError && <div aria-live="polite" className="border-t border-risk-red/25 bg-risk-red/5 px-4 py-3 text-xs text-risk-red">{submitError}</div>}
     </form>

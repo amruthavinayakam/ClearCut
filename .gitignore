@@ -15,7 +15,7 @@ backend/app/static/
 *.egg-info/
 *.tsbuildinfo
 .pytest_cache/
-uploads/
+/uploads/
 .last_project
 .claude/
 apps/api/.clearcut/

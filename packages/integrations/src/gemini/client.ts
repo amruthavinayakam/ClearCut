@@ -14,6 +14,7 @@ import {
   type ScriptScanInput,
   validateOutput,
 } from "../types";
+import { isVerifiedSample } from "../sample";
 
 const GEMINI_SYSTEM = `You are a film-production clearance research assistant. Detect potentially
 clearable elements and assemble evidence for human legal review. Never decide that an element is
@@ -46,19 +47,30 @@ function textFromGemini(value: unknown): unknown {
 }
 
 export class FixtureGeminiClient implements GeminiClient {
-  async scanScreenplay(_input: ScriptScanInput) {
+  async scanScreenplay(input: ScriptScanInput) {
     return ScriptScanResultSchema.parse(await Bun.file(
-      new URL("../../../../fixtures/research/screenplay.json", import.meta.url),
+      new URL(
+        isVerifiedSample(input.productionTitle)
+          ? "../../../../fixtures/research/artemis/screenplay.json"
+          : "../../../../fixtures/research/screenplay.json",
+        import.meta.url,
+      ),
     ).json());
   }
 
-  async scanCut(_input: CutScanInput) {
+  async scanCut(input: CutScanInput) {
     return CutScanResultSchema.parse(await Bun.file(
-      new URL("../../../../fixtures/research/cut.json", import.meta.url),
+      new URL(
+        isVerifiedSample(input.productionTitle)
+          ? "../../../../fixtures/research/artemis/cut.json"
+          : "../../../../fixtures/research/cut.json",
+        import.meta.url,
+      ),
     ).json());
   }
 
   async reconcile(input: ReconcileInput) {
+    const verified = isVerifiedSample(input.productionTitle);
     const unusedCut = new Set(input.cut.map((_, index) => index));
     const matches: ReconciliationMatch[] = input.script.map((script, scriptIndex) => {
       const exact = input.cut.findIndex((cut, index) => unusedCut.has(index) && cut.name === script.name);
@@ -69,7 +81,9 @@ export class FixtureGeminiClient implements GeminiClient {
           script_index: scriptIndex,
           cut_index: null,
           relationship: "script_only" as const,
-          explanation: "MOCK: The scripted element was not detected in this rough cut.",
+          explanation: verified
+            ? "The scripted element was not observed in the supplied rough cut."
+            : "MOCK: The scripted element was not detected in this rough cut.",
         };
       }
       unusedCut.delete(cutIndex);
@@ -79,8 +93,12 @@ export class FixtureGeminiClient implements GeminiClient {
         cut_index: cutIndex,
         relationship,
         explanation: relationship === "in_both"
-          ? "MOCK: The same named element appears on the page and on screen."
-          : "MOCK: A generic scripted reference became a specific identifiable element on screen.",
+          ? verified
+            ? "The same identified element appears in the documentary script and the supplied picture."
+            : "MOCK: The same named element appears on the page and on screen."
+          : verified
+            ? "A generic scripted reference resolves to a more specific identifiable element on screen."
+            : "MOCK: A generic scripted reference became a specific identifiable element on screen.",
       };
     });
     for (const cutIndex of unusedCut) {
@@ -88,7 +106,9 @@ export class FixtureGeminiClient implements GeminiClient {
         script_index: null,
         cut_index: cutIndex,
         relationship: "cut_only",
-        explanation: "MOCK: This element entered through the filmed material and was not in the screenplay.",
+        explanation: verified
+          ? "This element entered through the supplied picture and was not identified in the documentary script."
+          : "MOCK: This element entered through the filmed material and was not in the screenplay.",
       });
     }
     return ReconciliationResultSchema.parse({ matches });
@@ -99,8 +119,12 @@ export class FixtureGeminiClient implements GeminiClient {
     return CopilotAnswerSchema.parse({
       answer: asksForApproval
         ? "I cannot approve or clear an item. I can organize the evidence and gaps for the coordinator or counsel to review."
-        : `MOCK: I found ${input.project.items.length} clearance case(s) in the current project evidence.`,
-      citations: [],
+        : isVerifiedSample(input.project.title)
+          ? `The current record contains ${input.project.items.length} timecoded clearance case(s). The open questions are concentrated in protected NASA identifiers, the unidentified score, identifiable-person use, and shot-level NASA/ESA provenance.`
+          : `MOCK: I found ${input.project.items.length} clearance case(s) in the current project evidence.`,
+      citations: isVerifiedSample(input.project.title)
+        ? [...new Set(input.project.items.flatMap((item) => (item.sources ?? []).map((source) => source.url)))].slice(0, 4)
+        : [],
     });
   }
 }

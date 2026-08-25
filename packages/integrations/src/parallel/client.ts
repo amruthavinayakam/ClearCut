@@ -13,6 +13,35 @@ import {
   type RequestFunction,
   validateOutput,
 } from "../types";
+import { isVerifiedSample } from "../sample";
+
+type VerifiedSource = {
+  url: string;
+  title: string;
+  excerpt: string;
+  publish_date: string | null;
+};
+
+type VerifiedCase = Omit<Dossier, "run_id" | "basis"> & {
+  source_keys: string[];
+};
+
+type VerifiedResearchCatalog = {
+  sources: Record<string, VerifiedSource>;
+  cases: Record<string, VerifiedCase>;
+};
+
+async function verifiedResearch(): Promise<VerifiedResearchCatalog> {
+  return Bun.file(new URL("../../../../fixtures/research/artemis/research.json", import.meta.url)).json();
+}
+
+async function verifiedCase(item: ClearanceItem) {
+  const catalog = await verifiedResearch();
+  const dossier = catalog.cases[item.name];
+  if (!dossier) throw new Error(`Verified sample research is missing for ${item.name}.`);
+  const sources = dossier.source_keys.map((key) => catalog.sources[key]).filter((source): source is VerifiedSource => Boolean(source));
+  return { dossier, sources };
+}
 
 function queries(item: ClearanceItem): string[] {
   const suffix: Record<string, string[]> = {
@@ -59,6 +88,15 @@ export class FixtureParallelClient implements ParallelClient {
 
   async searchClearanceItem(item: ClearanceItem, _productionTitle: string, _sessionId: string) {
     this.calls.push({ operation: "search", itemId: item.id });
+    if (isVerifiedSample(_productionTitle)) {
+      const { sources } = await verifiedCase(item);
+      return sources.map((source) => EvidenceSourceSchema.parse({
+        ...source,
+        retrieved_at: new Date().toISOString(),
+        via: "parallel_search",
+        field: null,
+      }));
+    }
     const fixture = await Bun.file(new URL("../../../../fixtures/research/search.json", import.meta.url)).json() as {
       source: Record<string, unknown>;
     };
@@ -73,17 +111,32 @@ export class FixtureParallelClient implements ParallelClient {
 
   async buildDossier(item: ClearanceItem, _productionTitle: string, _sources: EvidenceSource[]) {
     this.calls.push({ operation: "dossier", itemId: item.id });
+    if (isVerifiedSample(_productionTitle)) {
+      const { dossier, sources } = await verifiedCase(item);
+      const { source_keys: _sourceKeys, ...fields } = dossier;
+      return DossierSchema.parse({
+        ...fields,
+        run_id: `verified-sample-task-${item.stable_item_id}`,
+        basis: sources.map((source) => ({
+          field: "public research",
+          reasoning: "Official source reviewed for the recorded candidate, route, and remaining evidence gap.",
+          confidence: dossier.overall_confidence,
+          citations: [{ url: source.url, title: source.title, excerpts: [source.excerpt] }],
+        })),
+      });
+    }
     const fixture = await Bun.file(new URL("../../../../fixtures/research/dossier.json", import.meta.url)).json();
     return DossierSchema.parse({ ...fixture, run_id: `mock-task-${item.id}`, basis: [] });
   }
 
   async createMonitor(item: ClearanceItem, _productionTitle: string, projectId: string, frequency: string) {
+    const verified = isVerifiedSample(_productionTitle);
     return MonitorRecordSchema.parse({
-      monitor_id: `mock-monitor-${item.id}`,
+      monitor_id: verified ? `verified-sample-monitor-${item.id}` : `mock-monitor-${item.id}`,
       project_id: projectId,
       item_id: item.id,
       item_name: item.name,
-      query: `MOCK: ${monitorQuery(item)}`,
+      query: verified ? monitorQuery(item) : `MOCK: ${monitorQuery(item)}`,
       frequency,
       created_at: new Date().toISOString(),
       status: "active",
@@ -95,6 +148,12 @@ export class FixtureParallelClient implements ParallelClient {
     const fixture = await Bun.file(new URL("../../../../fixtures/research/monitor.json", import.meta.url)).json() as {
       event: MonitorRecord["events"][number];
     };
+    if (monitorId.startsWith("verified-sample-monitor-")) {
+      const sample = await Bun.file(new URL("../../../../fixtures/research/artemis/monitor.json", import.meta.url)).json() as {
+        event: MonitorRecord["events"][number];
+      };
+      return [sample.event];
+    }
     return [{ ...fixture.event, event_id: `${monitorId}-event-1` }];
   }
 }

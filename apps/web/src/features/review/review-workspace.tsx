@@ -41,7 +41,7 @@ export function ReviewWorkspace({ project, initialCaseId }: { project: Project; 
       <div className="grid min-h-[calc(100dvh-4rem)] grid-cols-1 xl:grid-cols-[260px_minmax(420px,1fr)_360px]">
         <CaseRail items={project.items} onSelect={select} selectedId={selectedId} />
         <PictureWorkspace onSelect={select} project={project} selected={selected} />
-        {selected ? <EvidenceInspector item={selected} projectId={project.id} /> : <aside className="grid min-h-64 place-items-center border-l border-border p-6 text-xs text-muted-foreground">Select a clearance case.</aside>}
+        {selected ? <EvidenceInspector item={selected} key={selected.id} projectId={project.id} /> : <aside className="grid min-h-64 place-items-center border-l border-border p-6 text-xs text-muted-foreground">Select a clearance case.</aside>}
       </div>
     </main>
   );

@@ -3,6 +3,7 @@ import { extname } from "node:path";
 import type { Hono } from "hono";
 import { z } from "zod";
 import { CloudProjectCreateSchema } from "@clearcut/contracts";
+import { VERIFIED_SAMPLE_TITLE } from "@clearcut/integrations";
 
 import type { ApiDependencies, ClearCutEnv } from "../context";
 import { ApiProblem } from "../middleware/errors";
@@ -102,12 +103,12 @@ export function registerProjectRoutes(app: Hono<ClearCutEnv>, dependencies: ApiD
   });
 
   app.post("/api/projects/sample", async (context) => {
-    const script = Bun.file(new URL("../../../../fixtures/media/the_long_way_down.fountain", import.meta.url));
-    const cut = Bun.file(new URL("../../../../fixtures/media/the_long_way_down_roughcut.mp4", import.meta.url));
+    const script = Bun.file(new URL("../../../../fixtures/media/artemis-i-recap.fountain", import.meta.url));
+    const cut = Bun.file(new URL("../../../../fixtures/media/artemis-i-launch-recap.mp4", import.meta.url));
     const body = new FormData();
-    body.set("title", "The Long Way Down");
-    body.set("script", new File([await script.bytes()], "the_long_way_down.fountain", { type: "text/plain" }));
-    body.set("cut", new File([await cut.bytes()], "the_long_way_down_roughcut.mp4", { type: "video/mp4" }));
+    body.set("title", VERIFIED_SAMPLE_TITLE);
+    body.set("script", new File([await script.bytes()], "artemis-i-recap.fountain", { type: "text/plain" }));
+    body.set("cut", new File([await cut.bytes()], "artemis-i-launch-recap.mp4", { type: "video/mp4" }));
     const request = new Request(new URL("/api/projects", context.req.url), { method: "POST", body });
     return app.fetch(request);
   });
