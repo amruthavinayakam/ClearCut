@@ -6,6 +6,11 @@ __pycache__/
 node_modules/
 frontend/dist/
 backend/app/static/
+.next/
+.open-next/
+.wrangler/
+.vercel/
+*.tsbuildinfo
 .DS_Store
 *.egg-info/
 .pytest_cache/
