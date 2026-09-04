@@ -171,14 +171,19 @@ python -m venv .venv && .venv/bin/pip install -r requirements.txt
 ```
 
 ```bash
-cd frontend && npm install && npm run build
-```
-
-```bash
 .venv/bin/python -m uvicorn backend.app.main:app --port 8080
 ```
 
-Open <http://localhost:8080> and click **Run the seeded demo**.
+The API now runs standalone; the UI is a separate Next.js app in
+[`apps/web`](apps/web) (deployed to Cloudflare Workers in production). To run
+it locally against the API above:
+
+```bash
+bun install
+CLEARCUT_API_ORIGIN=http://localhost:8080 bun --filter @clearcut/web dev
+```
+
+Open the URL `next dev` prints and click **Run real sample**.
 
 On Windows use `.venv\Scripts\python.exe`. If `gcloud` complains about Python
 2.7, set `CLOUDSDK_PYTHON` to a Python 3 executable.

@@ -4,7 +4,6 @@ __pycache__/
 .env
 .env.local
 node_modules/
-frontend/node_modules/
 backend/app/static/
 .git/
 .github/
