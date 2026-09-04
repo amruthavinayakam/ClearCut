@@ -1,0 +1,11 @@
+{
+  "event": {
+    "event_id": "artemis-guidance-snapshot-2026-08",
+    "event_date": "2026-08-24T16:00:00.000Z",
+    "content": "Verified sample snapshot: NASA’s current media guidance separately addresses generally reusable agency content, protected identifiers, identifiable people, and third-party material. Recheck the recorded intended use before relying on the prior research status.",
+    "basis": {
+      "url": "https://www.nasa.gov/nasa-brand-center/images-and-media/",
+      "title": "NASA Images and Media Usage Guidelines"
+    }
+  }
+}

@@ -5,22 +5,45 @@ from __future__ import annotations
 import asyncio
 import json
 import logging
-import shutil
 import tempfile
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Optional
 
-from fastapi import Body, FastAPI, File, Form, HTTPException, Request, UploadFile
+from fastapi import FastAPI, File, Form, HTTPException, Request, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse, PlainTextResponse, Response, StreamingResponse
 from fastapi.staticfiles import StaticFiles
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
+from .assets import StoredAsset, get_asset_store
 from .config import get_settings
+from .documents import DocumentMetadataPatch, comma_list, find_document, scope_for
 from .export import to_markdown
-from .models import ApprovalDenied, Project, ProductionDocument
-from .pipeline import start_project
-from .screenplay import ScreenplayParseError
+from .models import (
+    Actor,
+    ApprovalDenied,
+    CutVersion,
+    Project,
+    ProductionDocument,
+    ProjectRevision,
+    ScriptVersion,
+    WorkflowStatus,
+)
+from .pipeline import research_item, run_revision_pipeline, start_project
+from .revisions import (
+    RevisionComparisonError,
+    RevisionConflictError,
+    apply_revision,
+    ensure_initial_revision,
+)
+from .scope import IntendedUseProfile
+from .screenplay import (
+    NoTextLayerError,
+    ScreenplayParseError,
+    UnreadableScreenplayError,
+    parse_screenplay,
+)
 from .store import store
 
 logging.basicConfig(
@@ -47,12 +70,7 @@ SAMPLES = Path(__file__).parent / "samples"
 SAMPLE_SCRIPT = SAMPLES / "the_long_way_down.fountain"
 SAMPLE_CUT = SAMPLES / "the_long_way_down_roughcut.mp4"
 STATIC_DIR = Path(__file__).parent / "static"
-
-UPLOADS = Path(tempfile.gettempdir()) / "clearance-radar-uploads"
-UPLOADS.mkdir(parents=True, exist_ok=True)
-
-# Where each project's cut lives on disk, so the player can stream it back.
-_CUT_PATHS: dict[str, Path] = {}
+asset_store = get_asset_store()
 
 
 # --------------------------------------------------------------------------
@@ -86,7 +104,7 @@ async def config() -> dict[str, Any]:
 
 
 def _payload(project: Project) -> dict[str, Any]:
-    data = project.model_dump(mode="json")
+    data = project.model_dump(mode="json", exclude={"revisions"})
     data["summary"] = project.summary()
     for raw, item in zip(data.get("items", []), project.items):
         raw["color"] = item.color
@@ -121,19 +139,150 @@ async def _probe_duration(path: Path) -> float:
 
 
 async def _launch(
-    script_bytes: Optional[bytes],
-    script_name: Optional[str],
-    cut_path: Optional[Path],
-    cut_name: Optional[str],
+    script_asset: Optional[StoredAsset],
+    cut_asset: Optional[StoredAsset],
     title: str,
 ) -> Project:
-    duration = await _probe_duration(cut_path) if cut_path else 0.0
-    project = await start_project(
-        script_bytes, script_name, cut_path, cut_name, duration, title=title
+    duration = 0.0
+    if cut_asset is not None:
+        async with asset_store.local_path(cut_asset.key) as cut_path:
+            duration = await _probe_duration(cut_path)
+    return await start_project(script_asset, cut_asset, duration, title=title)
+
+
+async def _read_upload(upload: UploadFile, label: str) -> bytes:
+    data = await upload.read(settings.max_upload_bytes + 1)
+    if len(data) > settings.max_upload_bytes:
+        raise HTTPException(status_code=413, detail=f"{label} is too large.")
+    return data
+
+
+SCRIPT_SUFFIXES = {".pdf", ".txt", ".fountain", ".fdx", ".md"}
+VIDEO_SUFFIXES = {".mp4", ".mov", ".m4v", ".webm"}
+
+
+class PreflightError(BaseModel):
+    code: str
+    message: str
+
+
+class PreflightResult(BaseModel):
+    kind: str
+    filename: str
+    mime_type: str
+    size_bytes: int
+    accepted: bool
+    details: dict[str, Any] = Field(default_factory=dict)
+    errors: list[PreflightError] = Field(default_factory=list)
+
+
+async def _preflight_bytes(
+    data: bytes, filename: str, mime_type: str
+) -> PreflightResult:
+    suffix = Path(filename).suffix.lower()
+    kind = (
+        "screenplay"
+        if suffix in SCRIPT_SUFFIXES
+        else "cut"
+        if suffix in VIDEO_SUFFIXES
+        else "unknown"
     )
-    if cut_path is not None:
-        _CUT_PATHS[project.id] = cut_path
-    return project
+    base = {
+        "kind": kind,
+        "filename": filename,
+        "mime_type": mime_type or "application/octet-stream",
+        "size_bytes": len(data),
+    }
+    if len(data) > settings.max_upload_bytes:
+        return PreflightResult(
+            **base,
+            accepted=False,
+            errors=[
+                PreflightError(
+                    code="too_large",
+                    message=f"File exceeds the {settings.max_upload_bytes // (1024 * 1024)} MB limit.",
+                )
+            ],
+        )
+    if kind == "unknown":
+        return PreflightResult(
+            **base,
+            accepted=False,
+            errors=[
+                PreflightError(
+                    code="unsupported_type",
+                    message="Use a supported screenplay document or video container.",
+                )
+            ],
+        )
+    if kind == "screenplay":
+        try:
+            document = parse_screenplay(data, filename)
+        except NoTextLayerError as exc:
+            return PreflightResult(
+                **base,
+                accepted=False,
+                errors=[PreflightError(code="no_text_layer", message=str(exc))],
+            )
+        except (UnreadableScreenplayError, ScreenplayParseError) as exc:
+            return PreflightResult(
+                **base,
+                accepted=False,
+                errors=[PreflightError(code="unreadable_container", message=str(exc))],
+            )
+        return PreflightResult(
+            **base,
+            accepted=True,
+            details={
+                "title": document.title,
+                "page_count": document.page_count,
+                "scene_count": len(document.scenes),
+                "readable_text": True,
+            },
+        )
+
+    with tempfile.TemporaryDirectory(prefix="clearcut-preflight-") as directory:
+        path = Path(directory) / f"asset{suffix}"
+        await asyncio.to_thread(path.write_bytes, data)
+        duration = await _probe_duration(path)
+    if duration <= 0:
+        return PreflightResult(
+            **base,
+            accepted=False,
+            errors=[
+                PreflightError(
+                    code="unreadable_container",
+                    message="The video container does not expose a readable duration.",
+                )
+            ],
+        )
+    return PreflightResult(
+        **base,
+        accepted=True,
+        details={"duration_s": duration},
+    )
+
+
+@app.post("/api/uploads/preflight")
+async def preflight_upload(file: UploadFile = File(...)) -> dict[str, Any]:
+    data = await file.read(settings.max_upload_bytes + 1)
+    result = await _preflight_bytes(
+        data,
+        file.filename or "upload",
+        file.content_type or "application/octet-stream",
+    )
+    return result.model_dump(mode="json")
+
+
+def _raise_preflight(result: PreflightResult) -> None:
+    if result.accepted:
+        return
+    error = result.errors[0]
+    status = 413 if error.code == "too_large" else 400
+    raise HTTPException(
+        status_code=status,
+        detail=f"{result.filename}: {error.code} — {error.message}",
+    )
 
 
 @app.post("/api/projects")
@@ -144,6 +293,30 @@ async def create_project(
 ) -> dict[str, Any]:
     if script is None and cut is None:
         raise HTTPException(status_code=400, detail="Upload a screenplay, a rough cut, or both.")
+    script_asset: Optional[StoredAsset] = None
+    script_bytes: Optional[bytes] = None
+    script_result: Optional[PreflightResult] = None
+    if script is not None:
+        script_bytes = await _read_upload(script, "Screenplay")
+        script_result = await _preflight_bytes(
+            script_bytes,
+            script.filename or "screenplay.txt",
+            script.content_type or "application/octet-stream",
+        )
+        _raise_preflight(script_result)
+
+    cut_asset: Optional[StoredAsset] = None
+    cut_bytes: Optional[bytes] = None
+    cut_result: Optional[PreflightResult] = None
+    if cut is not None:
+        cut_bytes = await _read_upload(cut, "Rough cut")
+        cut_result = await _preflight_bytes(
+            cut_bytes,
+            cut.filename or "rough-cut.mp4",
+            cut.content_type or "video/mp4",
+        )
+        _raise_preflight(cut_result)
+
     if not settings.parallel_configured:
         raise HTTPException(
             status_code=503,
@@ -151,32 +324,25 @@ async def create_project(
             "MOCK_RESEARCH=true to run against fixtures.",
         )
 
-    script_bytes: Optional[bytes] = None
-    script_name: Optional[str] = None
-    if script is not None:
-        script_bytes = await script.read()
-        script_name = script.filename or "screenplay.txt"
-        if len(script_bytes) > settings.max_upload_bytes:
-            raise HTTPException(status_code=413, detail="Screenplay is too large.")
-
-    cut_path: Optional[Path] = None
-    cut_name: Optional[str] = None
-    if cut is not None:
-        cut_name = cut.filename or "rough-cut.mp4"
-        cut_path = UPLOADS / f"{abs(hash(cut_name + str(id(cut))))}-{cut_name}"
-        size = 0
-        with cut_path.open("wb") as handle:
-            while chunk := await cut.read(1024 * 1024):
-                size += len(chunk)
-                if size > settings.max_upload_bytes:
-                    handle.close()
-                    cut_path.unlink(missing_ok=True)
-                    raise HTTPException(status_code=413, detail="Rough cut is too large.")
-                handle.write(chunk)
+    if script_bytes is not None and script_result is not None:
+        script_asset = await asset_store.put_bytes(
+            script_bytes,
+            script_result.filename,
+            script_result.mime_type,
+        )
+    if cut_bytes is not None and cut_result is not None:
+        cut_asset = await asset_store.put_bytes(
+            cut_bytes,
+            cut_result.filename,
+            cut_result.mime_type,
+        )
 
     try:
-        project = await _launch(script_bytes, script_name, cut_path, cut_name, title)
+        project = await _launch(script_asset, cut_asset, title)
     except ScreenplayParseError as exc:
+        for asset in (script_asset, cut_asset):
+            if asset is not None:
+                await asset_store.delete(asset.key)
         raise HTTPException(status_code=400, detail=str(exc)) from exc
     return _payload(project)
 
@@ -188,23 +354,40 @@ async def create_sample_project() -> dict[str, Any]:
             status_code=404,
             detail="Sample assets are missing. Run `python tools/generate_demo_assets.py`.",
         )
-    working = UPLOADS / SAMPLE_CUT.name
-    if not working.exists():
-        shutil.copy2(SAMPLE_CUT, working)
-
+    script_asset = await asset_store.put_bytes(
+        SAMPLE_SCRIPT.read_bytes(), SAMPLE_SCRIPT.name, "text/plain"
+    )
+    cut_asset = await asset_store.put_bytes(
+        SAMPLE_CUT.read_bytes(), SAMPLE_CUT.name, "video/mp4"
+    )
     project = await _launch(
-        SAMPLE_SCRIPT.read_bytes(),
-        SAMPLE_SCRIPT.name,
-        working,
-        SAMPLE_CUT.name,
+        script_asset,
+        cut_asset,
         "The Long Way Down",
     )
     return _payload(project)
 
 
+def _project_state(project: Project) -> str:
+    if project.phase == "failed":
+        return "Failed"
+    if project.phase != "ready":
+        return "Processing"
+    if any(item.workflow_status.startswith("reopened_by_") for item in project.items):
+        return "Reopened"
+    if project.items and all(item.is_resolved for item in project.items):
+        return "Documented"
+    if project.items and all(
+        item.is_resolved or item.workflow_status == "coordinator_verified"
+        for item in project.items
+    ):
+        return "Ready for counsel"
+    return "Needs review"
+
+
 @app.get("/api/projects")
-async def list_projects() -> dict[str, Any]:
-    projects = await store.list_projects()
+async def list_projects(include_archived: bool = False) -> dict[str, Any]:
+    projects = await store.list_projects(include_archived=include_archived)
     return {
         "projects": [
             {
@@ -212,7 +395,13 @@ async def list_projects() -> dict[str, Any]:
                 "title": p.title,
                 "phase": p.phase,
                 "created_at": p.created_at,
-                "summary": p.summary(),
+                "updated_at": p.updated_at,
+                "script_label": p.script.label if p.script else None,
+                "cut_label": p.cut.label if p.cut else None,
+                "unresolved_count": len(p.items) - sum(1 for item in p.items if item.is_resolved),
+                "total_items": len(p.items),
+                "state_label": _project_state(p),
+                "archived_at": p.archived_at,
             }
             for p in projects
         ]
@@ -231,6 +420,27 @@ async def get_project(project_id: str) -> dict[str, Any]:
     return _payload(await _require(project_id))
 
 
+class ProjectArchiveChange(BaseModel):
+    archived: bool
+
+
+@app.patch("/api/projects/{project_id}")
+async def update_project(project_id: str, body: ProjectArchiveChange) -> dict[str, Any]:
+    project = await _require(project_id)
+    now = datetime.now(timezone.utc).isoformat()
+    project.archived_at = now if body.archived else None
+    project.updated_at = now
+    project.log(
+        "project_archived" if body.archived else "project_restored",
+        actor="coordinator",
+        rationale="Project moved out of the active library."
+        if body.archived
+        else "Project restored to the active library.",
+    )
+    await store.put(project)
+    return _payload(project)
+
+
 @app.get("/api/projects/{project_id}/packet.md")
 async def get_packet(project_id: str) -> PlainTextResponse:
     project = await _require(project_id)
@@ -243,17 +453,210 @@ async def get_packet(project_id: str) -> PlainTextResponse:
     )
 
 
+@app.post("/api/projects/{project_id}/packet-exports")
+async def export_packet(project_id: str) -> PlainTextResponse:
+    project = await _require(project_id)
+    project.log(
+        "packet_exported",
+        actor="coordinator",
+        rationale="Current clearance research packet exported for human review.",
+        detail={"active_revision_id": project.active_revision_id},
+    )
+    project.updated_at = datetime.now(timezone.utc).isoformat()
+    await store.put(project)
+    return PlainTextResponse(
+        to_markdown(project),
+        media_type="text/markdown; charset=utf-8",
+        headers={
+            "Content-Disposition": f'attachment; filename="clearance-packet-{project_id}.md"'
+        },
+    )
+
+
+# --------------------------------------------------------------------------
+# Revision snapshots
+# --------------------------------------------------------------------------
+
+
+def _revision_payload(revision: ProjectRevision, *, include_items: bool = True) -> dict[str, Any]:
+    if include_items:
+        return revision.model_dump(mode="json")
+    return revision.model_dump(mode="json", exclude={"items"}) | {
+        "item_count": len(revision.items),
+        "change_counts": {
+            kind: sum(change.kind == kind for change in revision.changes)
+            for kind in (
+                "unchanged",
+                "added",
+                "removed",
+                "materially_changed",
+                "decision_stale",
+            )
+        },
+    }
+
+
+@app.get("/api/projects/{project_id}/revisions")
+async def list_revisions(project_id: str) -> dict[str, Any]:
+    project = await _require(project_id)
+    if not project.revisions and project.phase == "ready":
+        ensure_initial_revision(project)
+        await store.put(project)
+    return {
+        "active_revision_id": project.active_revision_id,
+        "revisions": [
+            _revision_payload(revision, include_items=False)
+            for revision in sorted(project.revisions, key=lambda value: value.sequence)
+        ],
+    }
+
+
+@app.get("/api/projects/{project_id}/revisions/{revision_id}")
+async def get_revision(project_id: str, revision_id: str) -> dict[str, Any]:
+    project = await _require(project_id)
+    revision = next((value for value in project.revisions if value.id == revision_id), None)
+    if revision is None:
+        raise HTTPException(status_code=404, detail="Revision not found.")
+    return _revision_payload(revision)
+
+
+@app.post("/api/projects/{project_id}/revisions")
+async def create_revision(
+    project_id: str,
+    script: Optional[UploadFile] = File(default=None),
+    cut: Optional[UploadFile] = File(default=None),
+) -> dict[str, Any]:
+    if script is None and cut is None:
+        raise HTTPException(status_code=400, detail="Upload a revised screenplay, cut, or both.")
+    project = await _require(project_id)
+    if not project.revisions:
+        ensure_initial_revision(project)
+    if not project.active_revision_id:
+        raise HTTPException(status_code=409, detail="The active project has no revision snapshot.")
+
+    uploaded_assets: list[StoredAsset] = []
+    script_version = project.script.model_copy(deep=True) if project.script else None
+    cut_version = project.cut.model_copy(deep=True) if project.cut else None
+    try:
+        if script is not None:
+            script_bytes = await _read_upload(script, "Screenplay")
+            result = await _preflight_bytes(
+                script_bytes,
+                script.filename or "screenplay.txt",
+                script.content_type or "application/octet-stream",
+            )
+            _raise_preflight(result)
+            if result.kind != "screenplay":
+                raise HTTPException(status_code=400, detail="The revised screenplay is not a screenplay document.")
+            asset = await asset_store.put_bytes(script_bytes, result.filename, result.mime_type)
+            uploaded_assets.append(asset)
+            script_version = ScriptVersion(
+                label=f"script-v{len(project.script_history) + 1}",
+                filename=asset.original_name,
+                title=str(result.details.get("title") or ""),
+                page_count=int(result.details.get("page_count") or 0),
+                scene_count=int(result.details.get("scene_count") or 0),
+                storage_key=asset.key,
+                mime_type=asset.mime_type,
+                size_bytes=asset.size_bytes,
+            )
+        if cut is not None:
+            cut_bytes = await _read_upload(cut, "Rough cut")
+            result = await _preflight_bytes(
+                cut_bytes,
+                cut.filename or "rough-cut.mp4",
+                cut.content_type or "video/mp4",
+            )
+            _raise_preflight(result)
+            if result.kind != "cut":
+                raise HTTPException(status_code=400, detail="The revised cut is not a video container.")
+            asset = await asset_store.put_bytes(cut_bytes, result.filename, result.mime_type)
+            uploaded_assets.append(asset)
+            cut_version = CutVersion(
+                label=f"rough-cut-v{len(project.cut_history) + 1}",
+                filename=asset.original_name,
+                duration_s=float(result.details.get("duration_s") or 0),
+                storage_key=asset.key,
+                mime_type=asset.mime_type,
+                size_bytes=asset.size_bytes,
+                gcs_uri=asset_store.cloud_uri(asset.key),
+                media_url=f"/api/projects/{project.id}/cut",
+            )
+    except Exception:
+        for asset in uploaded_assets:
+            await asset_store.delete(asset.key)
+        raise
+
+    revision = ProjectRevision(
+        sequence=max(value.sequence for value in project.revisions) + 1,
+        script=script_version,
+        cut=cut_version,
+        state="processing",
+        predecessor_id=project.active_revision_id,
+    )
+    project.revisions.append(revision)
+    project.log(
+        "revision_uploaded",
+        actor="coordinator",
+        rationale=f"Revision {revision.sequence} uploaded for comparison.",
+        detail={"revision_id": revision.id, "predecessor_id": revision.predecessor_id},
+    )
+    await store.put(project)
+    asyncio.create_task(run_revision_pipeline(project.id, revision.id))
+    return _revision_payload(revision)
+
+
+class RevisionApplyRequest(BaseModel):
+    predecessor_id: Optional[str] = None
+
+
+@app.post("/api/projects/{project_id}/revisions/{revision_id}/apply")
+async def promote_revision(
+    project_id: str,
+    revision_id: str,
+    body: RevisionApplyRequest,
+) -> dict[str, Any]:
+    project = await _require(project_id)
+    try:
+        revision, already_applied = apply_revision(project, revision_id, body.predecessor_id)
+    except RevisionConflictError as exc:
+        raise HTTPException(status_code=409, detail=str(exc)) from exc
+    except RevisionComparisonError as exc:
+        status = 404 if "not found" in str(exc).lower() else 409
+        raise HTTPException(status_code=status, detail=str(exc)) from exc
+    await store.put(project)
+    store.publish(
+        project.id,
+        {"type": "revision_applied", "revision_id": revision.id},
+    )
+    return {
+        "revision": _revision_payload(revision),
+        "project": _payload(project),
+        "already_applied": already_applied,
+    }
+
+
 @app.get("/api/projects/{project_id}/cut")
 async def get_cut(project_id: str, request: Request) -> Response:
     """Serve the rough cut with range support so the player can seek."""
-    path = _CUT_PATHS.get(project_id)
-    if path is None or not path.exists():
+    project = await _require(project_id)
+    if project.cut is None or not project.cut.storage_key:
         raise HTTPException(status_code=404, detail="No rough cut for this project.")
 
-    size = path.stat().st_size
+    try:
+        data = await asset_store.read_bytes(project.cut.storage_key)
+    except FileNotFoundError:
+        raise HTTPException(status_code=404, detail="Rough cut asset is missing.") from None
+
+    size = len(data)
+    media_type = project.cut.mime_type or "video/mp4"
     range_header = request.headers.get("range")
     if not range_header:
-        return FileResponse(path, media_type="video/mp4")
+        return Response(
+            content=data,
+            media_type=media_type,
+            headers={"Accept-Ranges": "bytes", "Content-Length": str(size)},
+        )
 
     try:
         units, _, span = range_header.partition("=")
@@ -271,21 +674,10 @@ async def get_cut(project_id: str, request: Request) -> Response:
         raise HTTPException(status_code=416, detail="Range not satisfiable.")
     length = end - start + 1
 
-    def stream():
-        with path.open("rb") as handle:
-            handle.seek(start)
-            remaining = length
-            while remaining > 0:
-                chunk = handle.read(min(256 * 1024, remaining))
-                if not chunk:
-                    break
-                remaining -= len(chunk)
-                yield chunk
-
-    return StreamingResponse(
-        stream(),
+    return Response(
+        content=data[start : end + 1],
         status_code=206,
-        media_type="video/mp4",
+        media_type=media_type,
         headers={
             "Content-Range": f"bytes {start}-{end}/{size}",
             "Accept-Ranges": "bytes",
@@ -339,10 +731,11 @@ async def stream_project(project_id: str, request: Request) -> StreamingResponse
 
 
 class StatusChange(BaseModel):
-    status: str
-    actor: str = "coordinator"
+    status: WorkflowStatus
+    actor: Actor = "coordinator"
     actor_name: str = ""
-    rationale: str = ""
+    rationale: str = Field(min_length=1, max_length=1000)
+    document_ids: list[str] = Field(default_factory=list)
 
 
 @app.post("/api/projects/{project_id}/items/{item_id}/status")
@@ -358,15 +751,25 @@ async def set_item_status(
     item = project.item(item_id)
     if item is None:
         raise HTTPException(status_code=404, detail="Item not found.")
-    if body.actor not in {"agent", "coordinator", "counsel", "system"}:
-        raise HTTPException(status_code=400, detail="Unknown actor.")
-
+    if body.status == "documented_permission":
+        owned_document_ids = {document.id for document in item.documents}
+        if not body.document_ids:
+            raise HTTPException(
+                status_code=422,
+                detail="Select at least one attached document before recording permission.",
+            )
+        if any(document_id not in owned_document_ids for document_id in body.document_ids):
+            raise HTTPException(
+                status_code=422,
+                detail="Every selected document must belong to this clearance item.",
+            )
     try:
         event = item.transition(
-            body.status,  # type: ignore[arg-type]
-            actor=body.actor,  # type: ignore[arg-type]
+            body.status,
+            actor=body.actor,
             actor_name=body.actor_name,
             rationale=body.rationale,
+            detail={"document_ids": body.document_ids} if body.document_ids else {},
         )
     except ApprovalDenied as exc:
         # 403 rather than 400: this is an authorisation boundary, and the demo
@@ -386,15 +789,74 @@ async def set_item_status(
     return {"item_id": item_id, "status": item.workflow_status, "event": event.model_dump()}
 
 
+@app.post("/api/projects/{project_id}/items/{item_id}/research")
+async def retry_item_research(project_id: str, item_id: str) -> dict[str, Any]:
+    project = await _require(project_id)
+    item = project.item(item_id)
+    if item is None:
+        raise HTTPException(status_code=404, detail="Item not found.")
+    if item.workflow_status == "researching":
+        raise HTTPException(status_code=409, detail="Research is already in progress.")
+    item.research_error = None
+    item.transition(
+        "researching",
+        actor="coordinator",
+        rationale="Coordinator requested another evidence research attempt.",
+    )
+    item.log(
+        "research_retry_requested",
+        actor="coordinator",
+        rationale="Coordinator requested another evidence research attempt.",
+    )
+    await store.put(project)
+    asyncio.create_task(research_item(project, item))
+    return {"item_id": item.id, "status": "researching"}
+
+
 @app.post("/api/projects/{project_id}/items/{item_id}/documents")
 async def attach_document(
-    project_id: str, item_id: str, document: ProductionDocument = Body(...)
+    project_id: str,
+    item_id: str,
+    file: UploadFile = File(...),
+    kind: str = Form(default="license"),
+    title: str = Form(default=""),
+    notes: str = Form(default=""),
+    media: str = Form(default=""),
+    territories: str = Form(default=""),
+    starts_on: Optional[str] = Form(default=None),
+    ends_on: Optional[str] = Form(default=None),
+    perpetual: bool = Form(default=False),
+    covered_use: str = Form(default=""),
+    attached_by: str = Form(default=""),
 ) -> dict[str, Any]:
     project = await _require(project_id)
     item = project.item(item_id)
     if item is None:
         raise HTTPException(status_code=404, detail="Item not found.")
-
+    if kind not in {"release", "license", "permit", "correspondence", "other"}:
+        raise HTTPException(status_code=422, detail="Unsupported document type.")
+    data = await _read_upload(file, "Document")
+    asset = await asset_store.put_bytes(
+        data,
+        file.filename or "document",
+        file.content_type or "application/octet-stream",
+    )
+    document = ProductionDocument(
+        kind=kind,
+        title=title.strip() or file.filename or "Untitled document",
+        notes=notes.strip(),
+        original_filename=asset.original_name,
+        mime_type=asset.mime_type,
+        size_bytes=asset.size_bytes,
+        storage_key=asset.key,
+        media=comma_list(media),
+        territories=comma_list(territories),
+        starts_on=starts_on or None,
+        ends_on=ends_on or None,
+        perpetual=perpetual,
+        covered_use=covered_use.strip(),
+        attached_by=attached_by.strip(),
+    )
     item.documents.append(document)
     item.log(
         "document_attached",
@@ -404,7 +866,138 @@ async def attach_document(
         detail={"document_id": document.id},
     )
     await store.put(project)
-    return {"item_id": item_id, "documents": [d.model_dump() for d in item.documents]}
+    return {
+        "item_id": item_id,
+        "document": document.model_dump(mode="json"),
+        "scope": scope_for(document, project.use_profile).model_dump(mode="json"),
+    }
+
+
+def _require_document(item, document_id: str) -> ProductionDocument:
+    document = find_document(item, document_id)
+    if document is None:
+        raise HTTPException(status_code=404, detail="Document not found for this item.")
+    return document
+
+
+@app.get("/api/projects/{project_id}/items/{item_id}/documents/{document_id}")
+async def download_document(project_id: str, item_id: str, document_id: str) -> Response:
+    project = await _require(project_id)
+    item = project.item(item_id)
+    if item is None:
+        raise HTTPException(status_code=404, detail="Item not found.")
+    document = _require_document(item, document_id)
+    if not document.storage_key:
+        raise HTTPException(status_code=404, detail="Document asset is missing.")
+    try:
+        data = await asset_store.read_bytes(document.storage_key)
+    except FileNotFoundError:
+        raise HTTPException(status_code=404, detail="Document asset is missing.") from None
+    filename = document.original_filename.replace('"', "") or "document"
+    return Response(
+        content=data,
+        media_type=document.mime_type,
+        headers={"Content-Disposition": f'attachment; filename="{filename}"'},
+    )
+
+
+@app.patch("/api/projects/{project_id}/items/{item_id}/documents/{document_id}")
+async def update_document(
+    project_id: str,
+    item_id: str,
+    document_id: str,
+    body: DocumentMetadataPatch,
+) -> dict[str, Any]:
+    project = await _require(project_id)
+    item = project.item(item_id)
+    if item is None:
+        raise HTTPException(status_code=404, detail="Item not found.")
+    document = _require_document(item, document_id)
+    changes = body.model_dump(exclude_unset=True)
+    if "kind" in changes and changes["kind"] not in {
+        "release", "license", "permit", "correspondence", "other"
+    }:
+        raise HTTPException(status_code=422, detail="Unsupported document type.")
+    for field, value in changes.items():
+        setattr(document, field, value)
+    item.log(
+        "document_metadata_updated",
+        actor="coordinator",
+        rationale=f"Updated recorded scope for {document.title}.",
+        detail={"document_id": document.id, "fields": sorted(changes)},
+    )
+    await store.put(project)
+    return {
+        "item_id": item_id,
+        "document": document.model_dump(mode="json"),
+        "scope": scope_for(document, project.use_profile).model_dump(mode="json"),
+    }
+
+
+@app.delete("/api/projects/{project_id}/items/{item_id}/documents/{document_id}")
+async def delete_document(project_id: str, item_id: str, document_id: str) -> Response:
+    project = await _require(project_id)
+    item = project.item(item_id)
+    if item is None:
+        raise HTTPException(status_code=404, detail="Item not found.")
+    document = _require_document(item, document_id)
+    if document.storage_key:
+        await asset_store.delete(document.storage_key)
+    item.documents = [candidate for candidate in item.documents if candidate.id != document_id]
+    item.log(
+        "document_removed",
+        actor="coordinator",
+        rationale=f"Removed {document.title} from the recorded evidence.",
+        detail={"document_id": document.id},
+    )
+    await store.put(project)
+    return Response(status_code=204)
+
+
+class CoordinationChange(BaseModel):
+    assigned_to: str = Field(max_length=80)
+
+
+@app.patch("/api/projects/{project_id}/items/{item_id}/coordination")
+async def update_coordination(
+    project_id: str, item_id: str, body: CoordinationChange
+) -> dict[str, Any]:
+    project = await _require(project_id)
+    item = project.item(item_id)
+    if item is None:
+        raise HTTPException(status_code=404, detail="Item not found.")
+    item.assigned_to = body.assigned_to.strip()
+    item.log(
+        "assignment_changed",
+        actor="coordinator",
+        actor_name=item.assigned_to,
+        rationale=f"Assigned to {item.assigned_to}." if item.assigned_to else "Assignment cleared.",
+    )
+    await store.put(project)
+    return {"item_id": item.id, "assigned_to": item.assigned_to}
+
+
+@app.patch("/api/projects/{project_id}/use-profile")
+async def update_use_profile(project_id: str, body: IntendedUseProfile) -> dict[str, Any]:
+    project = await _require(project_id)
+    project.use_profile = body
+    project.log(
+        "intended_use_updated",
+        actor="coordinator",
+        rationale="Updated the production's intended-use comparison profile.",
+        detail=body.model_dump(mode="json"),
+    )
+    await store.put(project)
+    return {
+        "use_profile": body.model_dump(mode="json"),
+        "assessments": {
+            item.id: {
+                document.id: scope_for(document, body).model_dump(mode="json")
+                for document in item.documents
+            }
+            for item in project.items
+        },
+    }
 
 
 class DraftRequest(BaseModel):

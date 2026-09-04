@@ -1,0 +1,143 @@
+{
+  "id": "proj_fixture",
+  "title": "Night Drive",
+  "created_at": "2026-08-24T12:00:00Z",
+  "updated_at": "2026-08-24T12:05:00Z",
+  "archived_at": null,
+  "phase": "ready",
+  "error": null,
+  "script": {
+    "id": "script_fixture",
+    "label": "Night Drive screenplay",
+    "filename": "night-drive.fountain",
+    "title": "Night Drive",
+    "page_count": 12,
+    "scene_count": 8,
+    "storage_key": "projects/proj_fixture/script/night-drive.fountain",
+    "mime_type": "text/plain",
+    "size_bytes": 8421
+  },
+  "cut": {
+    "id": "cut_fixture",
+    "label": "Night Drive rough cut",
+    "filename": "night-drive.mp4",
+    "duration_s": 94.2,
+    "media_url": "/api/projects/proj_fixture/cut",
+    "storage_key": "projects/proj_fixture/cut/night-drive.mp4",
+    "mime_type": "video/mp4",
+    "size_bytes": 15204321
+  },
+  "items": [
+    {
+      "id": "item_brand",
+      "stable_item_id": "stable_brand",
+      "name": "Northstar Cola",
+      "category": "brand",
+      "description": "A branded bottle is visible on the counter.",
+      "provenance": "both",
+      "source_version": "cut_fixture",
+      "script_references": [
+        {
+          "scene_index": 2,
+          "scene_heading": "INT. DINER - NIGHT",
+          "page": 3,
+          "excerpt": "Mara lifts a NORTHSTAR COLA.",
+          "usage_note": "Named prop"
+        }
+      ],
+      "cut_detections": [
+        {
+          "timecode": { "start": 14.2, "end": 18.7 },
+          "representative_time": 16.4,
+          "modality": "visual",
+          "observation": "Bottle label is readable.",
+          "confidence": "high",
+          "scene_match": 2,
+          "expected_from_script": true
+        }
+      ],
+      "detection_confidence": "high",
+      "research_priority": "high",
+      "production_impact": "Featured, readable use",
+      "workflow_status": "evidence_ready",
+      "candidate_rights_holders": [
+        {
+          "name": "Northstar Beverages",
+          "role": "Trademark owner candidate",
+          "rights_implicated": ["trademark"],
+          "share": "Unknown",
+          "confidence": "medium",
+          "basis": "Public brand materials"
+        }
+      ],
+      "licensing_routes": [
+        {
+          "organization": "Northstar Beverages",
+          "route": "Brand permissions",
+          "contact": "permissions@example.test",
+          "url": "https://example.test/permissions"
+        }
+      ],
+      "sources": [
+        {
+          "url": "https://example.test/northstar",
+          "title": "Northstar Beverages",
+          "excerpt": "Official company information.",
+          "publish_date": null,
+          "retrieved_at": "2026-08-24T12:04:00Z",
+          "via": "parallel_search",
+          "field": "candidate_rights_holders"
+        }
+      ],
+      "evidence_gaps": ["Confirm current trademark ownership"],
+      "unresolved_questions": ["Is featured use permitted?"],
+      "recommended_actions": ["Contact the brand permissions team"],
+      "research_summary": "Research identifies a candidate brand owner and contact route.",
+      "research_error": null,
+      "task_run_id": "task_fixture",
+      "documents": [],
+      "monitor_id": null,
+      "assigned_to": "",
+      "draft_request": null,
+      "audit_events": [],
+      "color": "red",
+      "citation_count": 1,
+      "is_resolved": false
+    }
+  ],
+  "reconciliation": [
+    {
+      "kind": "in_both",
+      "item_id": "item_brand",
+      "item_name": "Northstar Cola",
+      "explanation": "The named prop appears in the cut."
+    }
+  ],
+  "audit_events": [],
+  "activity_events": [
+    {
+      "id": "activity_fixture",
+      "at": "2026-08-24T12:05:00Z",
+      "phase": "ready",
+      "message": "Research ready for human review",
+      "detail": { "item_count": 1 }
+    }
+  ],
+  "use_profile": {
+    "media": ["festival", "streaming"],
+    "territories": ["worldwide"],
+    "starts_on": null,
+    "ends_on": null
+  },
+  "active_revision_id": "revision_fixture",
+  "summary": {
+    "colors": { "red": 1, "amber": 0, "blue": 0, "green": 0, "gray": 0 },
+    "by_category": { "brand": 1 },
+    "total_items": 1,
+    "unscripted_items": 0,
+    "resolved_items": 0,
+    "total_citations": 1,
+    "reconciliation": { "in_both": 1 },
+    "ai_issued_approvals": 0
+  }
+}

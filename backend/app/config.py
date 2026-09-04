@@ -3,7 +3,9 @@
 from __future__ import annotations
 
 import os
+import tempfile
 from functools import lru_cache
+from pathlib import Path
 
 from dotenv import load_dotenv
 from pydantic import BaseModel, Field
@@ -92,6 +94,11 @@ class Settings(BaseModel):
         default_factory=lambda: _str("FIRESTORE_COLLECTION", "clearance_projects")
     )
     use_firestore: bool = Field(default_factory=lambda: _flag("USE_FIRESTORE", False))
+    asset_storage_dir: str = Field(
+        default_factory=lambda: _str(
+            "ASSET_STORAGE_DIR", str(Path(tempfile.gettempdir()) / "clearcut-assets")
+        )
+    )
 
     # --- Server ---
     port: int = Field(default_factory=lambda: _int("PORT", 8080))

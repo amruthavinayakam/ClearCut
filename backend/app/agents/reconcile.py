@@ -259,9 +259,23 @@ async def reconcile(
         )
 
     # Unscripted first, then materially changed, then everything else: the
-    # queue should open on what nobody planned for.
-    priority = {"cut_only": 0, "materially_changed": 1, "both": 2, "script_only": 3}
-    items.sort(
-        key=lambda i: (priority.get(i.provenance, 4), i.name.lower())
-    )
+    # queue should open on what nobody planned for. `provenance` only tracks
+    # in_both/cut_only/script_only, so materially-changed items (provenance
+    # "both") need their own lookup rather than a provenance-keyed bucket.
+    materially_changed_ids = {
+        f.item_id for f in findings if f.kind == "materially_changed"
+    }
+
+    def sort_key(item: ClearanceItem) -> tuple[int, str]:
+        if item.provenance == "cut_only":
+            rank = 0
+        elif item.id in materially_changed_ids:
+            rank = 1
+        elif item.provenance == "both":
+            rank = 2
+        else:
+            rank = 3
+        return (rank, item.name.lower())
+
+    items.sort(key=sort_key)
     return items, findings

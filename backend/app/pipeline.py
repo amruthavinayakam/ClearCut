@@ -18,13 +18,13 @@ from __future__ import annotations
 import asyncio
 import logging
 from datetime import datetime, timezone
-from pathlib import Path
 from typing import Optional
 
+from .assets import StoredAsset, get_asset_store
 from .agents.cut_scan import scan_cut
 from .agents.reconcile import reconcile
 from .agents.script_scan import scan_script, script_context_digest
-from .models import ClearanceItem, CutVersion, Project, ScriptVersion
+from .models import ActivityEvent, ClearanceItem, CutVersion, Project, ScriptVersion
 from .parallel_client import (
     ParallelSearchError,
     apply_dossier,
@@ -32,6 +32,7 @@ from .parallel_client import (
     search_evidence,
 )
 from .screenplay import parse_screenplay
+from .revisions import build_candidate_revision, ensure_initial_revision
 from .store import store
 
 logger = logging.getLogger(__name__)
@@ -40,6 +41,10 @@ logger = logging.getLogger(__name__)
 async def _emit(project: Project, phase, message: str, **detail) -> None:
     project.phase = phase
     project.updated_at = datetime.now(timezone.utc).isoformat()
+    project.activity_events.append(
+        ActivityEvent(phase=phase, message=message, detail=detail)
+    )
+    project.activity_events = project.activity_events[-500:]
     await store.put(project)
     store.publish(
         project.id,
@@ -50,10 +55,8 @@ async def _emit(project: Project, phase, message: str, **detail) -> None:
 
 async def run_pipeline(
     project_id: str,
-    script_bytes: Optional[bytes],
-    script_name: Optional[str],
-    video_path: Optional[Path],
-    video_name: Optional[str],
+    script_asset: Optional[StoredAsset],
+    video_asset: Optional[StoredAsset],
     video_duration: float,
 ) -> None:
     project = await store.get(project_id)
@@ -66,18 +69,25 @@ async def run_pipeline(
         script_digest = ""
 
         # -- 1. script ------------------------------------------------------
-        if script_bytes and script_name:
+        asset_store = get_asset_store()
+        if script_asset is not None:
+            script_bytes = await asset_store.read_bytes(script_asset.key)
+            script_name = script_asset.original_name
             await _emit(project, "scanning_script", f"Reading {script_name}")
             doc = parse_screenplay(script_bytes, script_name)
-            version = ScriptVersion(
+            version = project.script or ScriptVersion(
                 label=f"script-v{len(project.script_history) + 1}",
                 filename=script_name,
-                title=doc.title,
-                page_count=doc.page_count,
-                scene_count=len(doc.scenes),
+                storage_key=script_asset.key,
+                mime_type=script_asset.mime_type,
+                size_bytes=script_asset.size_bytes,
             )
+            version.title = doc.title
+            version.page_count = doc.page_count
+            version.scene_count = len(doc.scenes)
             project.script = version
-            project.script_history.append(version)
+            if all(existing.id != version.id for existing in project.script_history):
+                project.script_history.append(version)
             project.title = doc.title
             await _emit(
                 project,
@@ -107,15 +117,21 @@ async def run_pipeline(
         # -- 2. cut ---------------------------------------------------------
         cut_rows = []
         cut_label = ""
-        if video_path is not None and video_name:
-            cut_version = CutVersion(
+        if video_asset is not None:
+            video_name = video_asset.original_name
+            cut_version = project.cut or CutVersion(
                 label=f"rough-cut-v{len(project.cut_history) + 1}",
                 filename=video_name,
                 duration_s=video_duration,
+                storage_key=video_asset.key,
+                mime_type=video_asset.mime_type,
+                size_bytes=video_asset.size_bytes,
+                gcs_uri=asset_store.cloud_uri(video_asset.key),
                 media_url=f"/api/projects/{project.id}/cut",
             )
             project.cut = cut_version
-            project.cut_history.append(cut_version)
+            if all(existing.id != cut_version.id for existing in project.cut_history):
+                project.cut_history.append(cut_version)
             cut_label = cut_version.label
 
             await _emit(
@@ -123,13 +139,14 @@ async def run_pipeline(
                 "scanning_cut",
                 f"Analysing {video_name} ({video_duration:.0f}s) with Gemini",
             )
-            cut_rows, notes = await scan_cut(
-                video_path,
-                project.title,
-                video_duration,
-                gcs_uri=cut_version.gcs_uri,
-                script_context=script_digest,
-            )
+            async with asset_store.local_path(video_asset.key) as video_path:
+                cut_rows, notes = await scan_cut(
+                    video_path,
+                    project.title,
+                    video_duration,
+                    gcs_uri=cut_version.gcs_uri,
+                    script_context=script_digest,
+                )
             await _emit(
                 project,
                 "scanning_cut",
@@ -169,6 +186,7 @@ async def run_pipeline(
 
         if not items:
             project.phase = "ready"
+            ensure_initial_revision(project)
             await store.put(project)
             store.publish(project.id, {"type": "done", "phase": "ready"})
             return
@@ -188,15 +206,24 @@ async def run_pipeline(
             actor="agent",
             rationale="Evidence assembled. All approval decisions remain with the coordinator.",
         )
+        ensure_initial_revision(project)
         await store.put(project)
         summary = project.summary()
         await _emit(project, "ready", "Evidence ready for review", **summary)
         store.publish(project.id, {"type": "done", "phase": "ready", "summary": summary})
 
-    except Exception as exc:  # noqa: BLE001 - surface the failure to the client
+    except Exception:  # noqa: BLE001 - preserve partial results and expose a safe recovery state
         logger.exception("Pipeline failed for project %s", project_id)
         project.phase = "failed"
-        project.error = f"{type(exc).__name__}: {exc}"
+        project.error = "Analysis stopped before completion. Existing results remain available."
+        project.activity_events.append(
+            ActivityEvent(
+                phase="failed",
+                message=project.error,
+                detail={"recoverable": True},
+            )
+        )
+        project.activity_events = project.activity_events[-500:]
         await store.put(project)
         store.publish(
             project.id, {"type": "error", "phase": "failed", "message": project.error}
@@ -218,7 +245,7 @@ async def _research_all(project: Project, items: list[ClearanceItem]) -> None:
 
 async def research_item(project: Project, item: ClearanceItem) -> None:
     """Search, then dossier, then hand to a human. Never sets an approval state."""
-    if not item.has_human_decision:
+    if not item.has_human_decision and item.workflow_status != "researching":
         item.transition(
             "researching",
             actor="agent",
@@ -318,19 +345,170 @@ async def research_item(project: Project, item: ClearanceItem) -> None:
 
 
 async def start_project(
-    script_bytes: Optional[bytes],
-    script_name: Optional[str],
-    video_path: Optional[Path],
-    video_name: Optional[str],
+    script_asset: Optional[StoredAsset],
+    video_asset: Optional[StoredAsset],
     video_duration: float,
     title: str = "Untitled production",
 ) -> Project:
     project = Project(title=title)
+    asset_store = get_asset_store()
+    if script_asset is not None:
+        project.script = ScriptVersion(
+            label="script-v1",
+            filename=script_asset.original_name,
+            storage_key=script_asset.key,
+            mime_type=script_asset.mime_type,
+            size_bytes=script_asset.size_bytes,
+        )
+        project.script_history.append(project.script)
+    if video_asset is not None:
+        project.cut = CutVersion(
+            label="rough-cut-v1",
+            filename=video_asset.original_name,
+            duration_s=video_duration,
+            storage_key=video_asset.key,
+            mime_type=video_asset.mime_type,
+            size_bytes=video_asset.size_bytes,
+            gcs_uri=asset_store.cloud_uri(video_asset.key),
+            media_url=f"/api/projects/{project.id}/cut",
+        )
+        project.cut_history.append(project.cut)
     project.log("project_created", actor="coordinator", rationale="Upload received.")
     await store.put(project)
     asyncio.create_task(
         run_pipeline(
-            project.id, script_bytes, script_name, video_path, video_name, video_duration
+            project.id, script_asset, video_asset, video_duration
         )
     )
     return project
+
+
+async def run_revision_pipeline(project_id: str, revision_id: str) -> None:
+    """Analyse a detached candidate without replacing the active project state."""
+    project = await store.get(project_id)
+    if project is None:
+        return
+    placeholder = next(
+        (revision for revision in project.revisions if revision.id == revision_id),
+        None,
+    )
+    if placeholder is None:
+        return
+
+    async def progress(message: str, **detail) -> None:
+        project.activity_events.append(
+            ActivityEvent(
+                phase="revision_processing",
+                message=message,
+                detail={"revision_id": revision_id, **detail},
+            )
+        )
+        project.activity_events = project.activity_events[-500:]
+        await store.put(project)
+        store.publish(
+            project.id,
+            {
+                "type": "revision_progress",
+                "revision_id": revision_id,
+                "message": message,
+                "detail": detail,
+            },
+        )
+
+    asset_store = get_asset_store()
+    try:
+        script_items: list[ClearanceItem] = []
+        script_digest = ""
+        title = project.title
+        script_version = placeholder.script
+        if script_version and script_version.storage_key:
+            await progress(f"Reading {script_version.filename}")
+            script_bytes = await asset_store.read_bytes(script_version.storage_key)
+            document = parse_screenplay(script_bytes, script_version.filename)
+            script_version.title = document.title
+            script_version.page_count = document.page_count
+            script_version.scene_count = len(document.scenes)
+            title = document.title or title
+            script_items = await scan_script(document, script_version.label)
+            script_digest = script_context_digest(script_items)
+            await progress(
+                f"Candidate screenplay produced {len(script_items)} clearance element(s)",
+                count=len(script_items),
+            )
+
+        cut_rows = []
+        cut_version = placeholder.cut
+        cut_label = script_version.label if script_version else "script only"
+        if cut_version and cut_version.storage_key:
+            await progress(f"Analysing {cut_version.filename}")
+            async with asset_store.local_path(cut_version.storage_key) as video_path:
+                cut_rows, _ = await scan_cut(
+                    video_path,
+                    title,
+                    cut_version.duration_s,
+                    gcs_uri=cut_version.gcs_uri,
+                    script_context=script_digest,
+                )
+            cut_label = cut_version.label
+            await progress(
+                f"Candidate cut produced {len(cut_rows)} detected element(s)",
+                count=len(cut_rows),
+            )
+
+        items, _ = await reconcile(script_items, cut_rows, cut_label)
+        candidate = build_candidate_revision(
+            project,
+            items,
+            script=script_version,
+            cut=cut_version,
+            revision_id=placeholder.id,
+        )
+        candidate.sequence = placeholder.sequence
+        candidate.created_at = placeholder.created_at
+        project.revisions = [
+            candidate if revision.id == revision_id else revision
+            for revision in project.revisions
+        ]
+        project.log(
+            "revision_compared",
+            actor="agent",
+            rationale=f"Revision {candidate.sequence} is ready for human comparison.",
+            detail={
+                "revision_id": candidate.id,
+                "changes": {
+                    kind: sum(change.kind == kind for change in candidate.changes)
+                    for kind in (
+                        "unchanged",
+                        "added",
+                        "removed",
+                        "materially_changed",
+                        "decision_stale",
+                    )
+                },
+            },
+        )
+        await store.put(project)
+        store.publish(
+            project.id,
+            {"type": "revision_ready", "revision_id": candidate.id},
+        )
+    except Exception:  # noqa: BLE001 - active state remains intact by construction
+        logger.exception("Revision comparison failed for %s", revision_id)
+        placeholder.state = "failed"
+        placeholder.error = "Comparison stopped. The active revision was not changed."
+        project.activity_events.append(
+            ActivityEvent(
+                phase="revision_failed",
+                message=placeholder.error,
+                detail={"revision_id": revision_id},
+            )
+        )
+        await store.put(project)
+        store.publish(
+            project.id,
+            {
+                "type": "revision_failed",
+                "revision_id": revision_id,
+                "message": placeholder.error,
+            },
+        )

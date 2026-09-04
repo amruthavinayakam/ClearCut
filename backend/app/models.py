@@ -14,6 +14,8 @@ from typing import Any, Literal, Optional
 
 from pydantic import BaseModel, Field
 
+from .scope import IntendedUseProfile
+
 # --------------------------------------------------------------------------
 # Vocabulary
 # --------------------------------------------------------------------------
@@ -222,6 +224,14 @@ class AuditEvent(BaseModel):
     detail: dict[str, Any] = Field(default_factory=dict)
 
 
+class ActivityEvent(BaseModel):
+    id: str = Field(default_factory=lambda: _uid("activity"))
+    at: str = Field(default_factory=_now)
+    phase: str
+    message: str
+    detail: dict[str, Any] = Field(default_factory=dict)
+
+
 # --------------------------------------------------------------------------
 # Clearance item
 # --------------------------------------------------------------------------
@@ -235,12 +245,23 @@ class ProductionDocument(BaseModel):
     covers_territory: str = ""
     covers_term: str = ""
     covers_media: str = ""
+    original_filename: str = ""
+    mime_type: str = "application/octet-stream"
+    size_bytes: int = 0
+    storage_key: str = ""
+    media: list[str] = Field(default_factory=list)
+    territories: list[str] = Field(default_factory=list)
+    starts_on: Optional[str] = None
+    ends_on: Optional[str] = None
+    perpetual: bool = False
+    covered_use: str = ""
     attached_at: str = Field(default_factory=_now)
     attached_by: str = ""
 
 
 class ClearanceItem(BaseModel):
     id: str = Field(default_factory=lambda: _uid("item"))
+    stable_item_id: str = Field(default_factory=lambda: _uid("stable"))
     name: str
     category: Category
     description: str = ""
@@ -408,6 +429,9 @@ class ScriptVersion(BaseModel):
     title: str = ""
     page_count: int = 0
     scene_count: int = 0
+    storage_key: str = ""
+    mime_type: str = "application/octet-stream"
+    size_bytes: int = 0
     uploaded_at: str = Field(default_factory=_now)
 
 
@@ -416,6 +440,9 @@ class CutVersion(BaseModel):
     label: str = "rough-cut-v1"
     filename: str = ""
     duration_s: float = 0.0
+    storage_key: str = ""
+    mime_type: str = "video/mp4"
+    size_bytes: int = 0
     gcs_uri: Optional[str] = None
     media_url: str = ""
     uploaded_at: str = Field(default_factory=_now)
@@ -431,12 +458,46 @@ ProjectPhase = Literal[
     "failed",
 ]
 
+RevisionChangeKind = Literal[
+    "unchanged",
+    "added",
+    "removed",
+    "materially_changed",
+    "decision_stale",
+]
+
+
+class RevisionChange(BaseModel):
+    kind: RevisionChangeKind
+    stable_item_id: str
+    item_name: str
+    before_item_id: Optional[str] = None
+    after_item_id: Optional[str] = None
+    explanation: str = ""
+    match_basis: str = ""
+    previous_status: Optional[WorkflowStatus] = None
+
+
+class ProjectRevision(BaseModel):
+    id: str = Field(default_factory=lambda: _uid("revision"))
+    sequence: int
+    script: Optional[ScriptVersion] = None
+    cut: Optional[CutVersion] = None
+    state: Literal["processing", "ready", "failed", "applied"] = "processing"
+    items: list[ClearanceItem] = Field(default_factory=list)
+    changes: list[RevisionChange] = Field(default_factory=list)
+    predecessor_id: Optional[str] = None
+    created_at: str = Field(default_factory=_now)
+    applied_at: Optional[str] = None
+    error: Optional[str] = None
+
 
 class Project(BaseModel):
     id: str = Field(default_factory=lambda: _uid("proj"))
     title: str = "Untitled production"
     created_at: str = Field(default_factory=_now)
     updated_at: str = Field(default_factory=_now)
+    archived_at: Optional[str] = None
     phase: ProjectPhase = "created"
     error: Optional[str] = None
 
@@ -448,6 +509,10 @@ class Project(BaseModel):
     items: list[ClearanceItem] = Field(default_factory=list)
     reconciliation: list[ReconciliationFinding] = Field(default_factory=list)
     audit_events: list[AuditEvent] = Field(default_factory=list)
+    activity_events: list[ActivityEvent] = Field(default_factory=list)
+    use_profile: IntendedUseProfile = Field(default_factory=IntendedUseProfile)
+    revisions: list[ProjectRevision] = Field(default_factory=list)
+    active_revision_id: Optional[str] = None
 
     def item(self, item_id: str) -> Optional[ClearanceItem]:
         return next((i for i in self.items if i.id == item_id), None)
@@ -482,6 +547,11 @@ class Project(BaseModel):
             by_category[item.category] = by_category.get(item.category, 0) + 1
 
         unscripted = sum(1 for i in self.items if i.provenance == "cut_only")
+        all_audit_events = [*self.audit_events, *(event for item in self.items for event in item.audit_events)]
+        ai_issued_approvals = sum(
+            event.actor in {"agent", "system"} and event.to_status in HUMAN_OWNED_STATUSES
+            for event in all_audit_events
+        )
         return {
             "colors": colors,
             "by_category": by_category,
@@ -493,8 +563,9 @@ class Project(BaseModel):
                 kind: sum(1 for f in self.reconciliation if f.kind == kind)
                 for kind in ("in_both", "script_only", "cut_only", "materially_changed", "approval_stale")
             },
-            # Stated as a headline number because it is the product's core claim.
-            "ai_issued_approvals": 0,
+            # Measured rather than asserted. The transition guard keeps this at
+            # zero; legacy/corrupt data would be surfaced instead of hidden.
+            "ai_issued_approvals": ai_issued_approvals,
         }
 
 

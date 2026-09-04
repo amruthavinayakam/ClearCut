@@ -1,0 +1,36 @@
+{
+  "headers": {
+    "x-nextjs-stale-time": "300",
+    "x-nextjs-prerender": "1",
+    "x-next-cache-tags": "_N_T_/layout,_N_T_/(product)/layout,_N_T_/(product)/projects/layout,_N_T_/(product)/projects/new/layout,_N_T_/(product)/projects/new/page,_N_T_/projects/new"
+  },
+  "segmentPaths": [
+    "/_tree",
+    "/_full",
+    "/!KHByb2R1Y3Qp/projects/new/__PAGE__"
+  ],
+  "prefetchHints": {
+    "hints": 64,
+    "slots": {
+      "children": {
+        "hints": 96,
+        "slots": {
+          "children": {
+            "hints": 96,
+            "slots": {
+              "children": {
+                "hints": 96,
+                "slots": {
+                  "children": {
+                    "hints": 160,
+                    "slots": null
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+}

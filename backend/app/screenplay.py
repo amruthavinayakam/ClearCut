@@ -55,20 +55,33 @@ class ScreenplayParseError(ValueError):
     """Raised when a file yields no usable text."""
 
 
+class NoTextLayerError(ScreenplayParseError):
+    """Raised when a valid-looking document contains no extractable text."""
+
+
+class UnreadableScreenplayError(ScreenplayParseError):
+    """Raised when the uploaded bytes are not a readable document container."""
+
+
 def _pdf_lines(data: bytes) -> list[tuple[int, str]]:
     from pypdf import PdfReader
 
-    reader = PdfReader(io.BytesIO(data))
-    lines: list[tuple[int, str]] = []
-    for page_no, page in enumerate(reader.pages, start=1):
-        text = page.extract_text() or ""
-        for raw in text.splitlines():
-            lines.append((page_no, raw.rstrip()))
+    try:
+        reader = PdfReader(io.BytesIO(data))
+        lines: list[tuple[int, str]] = []
+        for page_no, page in enumerate(reader.pages, start=1):
+            text = page.extract_text() or ""
+            for raw in text.splitlines():
+                lines.append((page_no, raw.rstrip()))
+    except Exception as exc:  # pypdf exposes several container-specific errors
+        raise UnreadableScreenplayError("The PDF container could not be read.") from exc
     return lines
 
 
 def _text_lines(data: bytes) -> list[tuple[int, str]]:
     text = data.decode("utf-8", errors="replace")
+    if text and text.count("\ufffd") / len(text) > 0.08:
+        raise UnreadableScreenplayError("The file is not readable UTF-8 text.")
     lines: list[tuple[int, str]] = []
     page = 1
     for raw in text.splitlines():
@@ -112,7 +125,7 @@ def parse_screenplay(data: bytes, filename: str) -> ScreenplayDoc:
         lines = _text_lines(data)
 
     if not any(raw.strip() for _, raw in lines):
-        raise ScreenplayParseError(
+        raise NoTextLayerError(
             "No text could be extracted. If this is a scanned PDF, it needs OCR first."
         )
 

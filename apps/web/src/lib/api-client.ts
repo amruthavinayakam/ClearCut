@@ -1,0 +1,73 @@
+import {
+  ApiErrorSchema,
+  AppConfigSchema,
+  PreflightResultSchema,
+  ProjectListSchema,
+  ProjectSchema,
+  type AppConfig,
+  type PreflightResult,
+  type Project,
+  type ProjectListItem,
+} from "@clearcut/contracts";
+
+const serverOrigin = process.env.CLEARCUT_API_ORIGIN ?? "https://clearcut-api.lcl";
+
+function endpoint(path: string) {
+  if (typeof window !== "undefined") return path;
+  return `${serverOrigin}${path}`;
+}
+
+export class ApiClientError extends Error {
+  constructor(
+    message: string,
+    readonly code: string,
+    readonly requestId?: string,
+  ) {
+    super(message);
+  }
+}
+
+export async function apiRequest<T>(path: string, schema: { parse(value: unknown): T }, init?: RequestInit): Promise<T> {
+  const response = await fetch(endpoint(path), { cache: "no-store", ...init });
+  const body: unknown = await response.json();
+  if (!response.ok) {
+    const parsed = ApiErrorSchema.safeParse(body);
+    if (parsed.success) throw new ApiClientError(parsed.data.message, parsed.data.code, parsed.data.request_id);
+    throw new ApiClientError(`Request failed with status ${response.status}.`, "request_failed");
+  }
+  return schema.parse(body);
+}
+
+export async function apiTextRequest(path: string, init?: RequestInit): Promise<string> {
+  const response = await fetch(endpoint(path), { cache: "no-store", ...init });
+  if (!response.ok) {
+    let message = `Request failed with status ${response.status}.`;
+    try {
+      const problem = ApiErrorSchema.safeParse(await response.json());
+      if (problem.success) message = problem.data.message;
+    } catch {
+      // The text boundary may not return JSON for upstream failures.
+    }
+    throw new ApiClientError(message, "request_failed");
+  }
+  return response.text();
+}
+
+export function getConfig(): Promise<AppConfig> {
+  return apiRequest("/api/config", AppConfigSchema);
+}
+
+export async function listProjects(includeArchived = false): Promise<ProjectListItem[]> {
+  const result = await apiRequest(`/api/projects${includeArchived ? "?include_archived=true" : ""}`, ProjectListSchema);
+  return result.projects;
+}
+
+export function getProject(projectId: string): Promise<Project> {
+  return apiRequest(`/api/projects/${encodeURIComponent(projectId)}`, ProjectSchema);
+}
+
+export async function preflightFile(file: File): Promise<PreflightResult> {
+  const body = new FormData();
+  body.set("file", file);
+  return apiRequest("/api/uploads/preflight", PreflightResultSchema, { method: "POST", body });
+}

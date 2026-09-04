@@ -1,0 +1,7 @@
+{
+  "event": {
+    "event_id": "mock-monitor-event-1",
+    "event_date": "2026-08-24",
+    "content": "MOCK: A public ownership or licensing change was detected by the fixture monitor."
+  }
+}

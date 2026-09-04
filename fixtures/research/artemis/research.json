@@ -1,0 +1,278 @@
+{
+  "sources": {
+    "exact_asset": {
+      "url": "https://images.nasa.gov/details/Artemis%20I%20Launches%20to%20the%20Moon%20(Official%20NASA%20Recap)",
+      "title": "Artemis I Launches to the Moon (Official NASA Recap)",
+      "excerpt": "NASA Image and Video Library catalog record for the exact 151.57-second source asset used in this project.",
+      "publish_date": "2022-11-16"
+    },
+    "nasa_media": {
+      "url": "https://www.nasa.gov/nasa-brand-center/images-and-media/",
+      "title": "NASA Images and Media Usage Guidelines",
+      "excerpt": "NASA says its content generally is not subject to copyright in the United States, but factual use must not imply endorsement; identifiable people and marked third-party material require separate attention.",
+      "publish_date": null
+    },
+    "nasa_brand": {
+      "url": "https://www.nasa.gov/nasa-brand-center/brand-guidelines/",
+      "title": "NASA Brand Guidelines",
+      "excerpt": "NASA states that its Insignia, Logotype, identifiers, and imagery are not in the public domain and directs brand questions to agency-brand@nasa.gov.",
+      "publish_date": null
+    },
+    "nasa_film": {
+      "url": "https://www.nasa.gov/collaborating-with-nasa/film-and-documentary-guidelines/",
+      "title": "NASA Film and Documentary Guidelines",
+      "excerpt": "NASA distinguishes use of publicly available footage from requests for agency participation, location access, identifier clearance, or production assistance.",
+      "publish_date": null
+    },
+    "artemis_mission": {
+      "url": "https://www.nasa.gov/mission/artemis-i/",
+      "title": "Artemis I",
+      "excerpt": "NASA identifies Artemis I as the first integrated flight test of Orion, the Space Launch System, and upgraded Exploration Ground Systems at Kennedy Space Center.",
+      "publish_date": null
+    },
+    "pad_39b": {
+      "url": "https://www.nasa.gov/humans-in-space/exploration-ground-systems/launch-pad-39b/",
+      "title": "Launch Pad 39B",
+      "excerpt": "NASA’s facility page identifies Launch Pad 39B at Kennedy Space Center and records its support of the Artemis I mission.",
+      "publish_date": null
+    },
+    "bill_nelson": {
+      "url": "https://www.nasa.gov/people/nasa-administrator-bill-nelson/",
+      "title": "Bill Nelson — NASA Administrator, May 2021–January 2025",
+      "excerpt": "NASA’s biography confirms Bill Nelson’s identity and dates of service as the agency’s fourteenth administrator.",
+      "publish_date": "2025-01-20"
+    },
+    "esa_orion": {
+      "url": "https://www.esa.int/Science_Exploration/Human_and_Robotic_Exploration/Orion/Orion_spacecraft",
+      "title": "ESA — Orion spacecraft",
+      "excerpt": "ESA states that it provides Orion’s European Service Module, supplying electricity, propulsion, thermal control, air, and water.",
+      "publish_date": null
+    }
+  },
+  "cases": {
+    "NASA insignia": {
+      "source_keys": ["exact_asset", "nasa_media", "nasa_brand"],
+      "candidate_rights_holders": [
+        {
+          "name": "NASA Office of Communications",
+          "role": "administrator of NASA identifiers and brand guidance",
+          "rights_implicated": ["agency identifier use", "insignia presentation", "non-endorsement restrictions"],
+          "share": "Not a copyright-share analysis",
+          "confidence": "high",
+          "basis": "NASA’s current brand guidance identifies the insignia and official identifiers as protected and supplies a brand contact."
+        }
+      ],
+      "licensing_routes": [
+        {
+          "organization": "NASA Office of Communications",
+          "route": "Request brand-usage guidance for the intended edit and distribution context.",
+          "contact": "agency-brand@nasa.gov",
+          "url": "https://www.nasa.gov/nasa-brand-center/brand-guidelines/"
+        }
+      ],
+      "research_summary": "The underlying NASA footage is generally available for factual use, but NASA treats its insignia and identifiers separately. The edit should preserve source attribution, avoid endorsement implications, and receive human review against the intended release context.",
+      "evidence_gaps": ["The project’s commercial, promotional, and merchandising contexts are not yet recorded."],
+      "unresolved_questions": ["Will the insignia appear only within the unaltered source footage, or also in marketing and key art?"],
+      "recommended_actions": ["Send the intended use, frame grabs, territories, and media plan to NASA’s brand contact for written guidance."],
+      "public_domain_status": "NASA-produced footage is generally not subject to U.S. copyright, but the NASA insignia and identifiers are expressly treated as protected.",
+      "known_disputes": "No dispute was identified in the reviewed official sources.",
+      "overall_confidence": "high"
+    },
+    "Artemis mission identity": {
+      "source_keys": ["exact_asset", "nasa_brand", "artemis_mission"],
+      "candidate_rights_holders": [
+        {
+          "name": "NASA Office of Communications",
+          "role": "administrator of NASA mission and campaign identifiers",
+          "rights_implicated": ["mission identity", "campaign identifier", "presentation standards"],
+          "share": "Not stated",
+          "confidence": "high",
+          "basis": "The identity appears in NASA’s own asset and NASA’s brand framework covers mission and campaign identifiers."
+        }
+      ],
+      "licensing_routes": [
+        {
+          "organization": "NASA Office of Communications",
+          "route": "Submit the featured Artemis identity use for brand-guidance review.",
+          "contact": "agency-brand@nasa.gov",
+          "url": "https://www.nasa.gov/nasa-brand-center/brand-guidelines/"
+        }
+      ],
+      "research_summary": "The Artemis identity is a featured graphic element, not merely incidental launch footage. NASA’s mission page verifies the subject; its brand guidance is the controlling public route for identifier questions.",
+      "evidence_gaps": ["No written confirmation covers the identity’s use outside the original NASA recap."],
+      "unresolved_questions": ["Will the edit reproduce or alter the Artemis identity in titles, thumbnails, or advertising?"],
+      "recommended_actions": ["Separate in-footage use from any newly created Artemis-branded graphics and obtain written guidance for the latter."],
+      "public_domain_status": "The public availability of the mission footage does not establish unrestricted use of the mission identity.",
+      "known_disputes": "None identified in the reviewed official sources.",
+      "overall_confidence": "high"
+    },
+    "Launch Pad 39B": {
+      "source_keys": ["exact_asset", "pad_39b", "nasa_film"],
+      "candidate_rights_holders": [
+        {
+          "name": "NASA Kennedy Space Center",
+          "role": "federal facility depicted in the source footage",
+          "rights_implicated": ["location depiction", "facility access distinction", "source-footage conditions"],
+          "share": "Not applicable",
+          "confidence": "high",
+          "basis": "NASA’s facility page verifies the location and its relationship to Artemis I."
+        }
+      ],
+      "licensing_routes": [
+        {
+          "organization": "NASA Entertainment Collaborations",
+          "route": "Confirm whether the intended use is limited to public archival footage or requests additional location participation.",
+          "contact": "nasa-entertainment-collaborations@mail.nasa.gov",
+          "url": "https://www.nasa.gov/collaborating-with-nasa/film-and-documentary-guidelines/"
+        }
+      ],
+      "research_summary": "Launch Pad 39B is verified as the NASA facility shown in the recap. Reusing NASA’s published footage is a different clearance path from filming or obtaining production assistance on NASA property.",
+      "evidence_gaps": ["The production has not stated whether it seeks only archival use or additional facility access."],
+      "unresolved_questions": ["Are any newly shot Kennedy Space Center exteriors or interiors planned?"],
+      "recommended_actions": ["Document that this cut uses the exact public asset; route any new location request through NASA Entertainment Collaborations."],
+      "public_domain_status": "Location facts are public; footage and agency participation remain subject to NASA’s published conditions.",
+      "known_disputes": "None identified.",
+      "overall_confidence": "high"
+    },
+    "NASA Artemis I launch footage": {
+      "source_keys": ["exact_asset", "nasa_media", "nasa_film"],
+      "candidate_rights_holders": [
+        {
+          "name": "National Aeronautics and Space Administration",
+          "role": "publisher and stated source of the selected recap asset",
+          "rights_implicated": ["archival source conditions", "attribution", "third-party-content review"],
+          "share": "NASA-produced asset; third-party components not itemized",
+          "confidence": "high",
+          "basis": "The exact asset is cataloged by NASA and the agency’s media guidance states the general reuse framework."
+        }
+      ],
+      "licensing_routes": [
+        {
+          "organization": "NASA Office of Communications",
+          "route": "Retain the exact catalog record and request clarification for any marked or unidentified third-party material.",
+          "contact": "NASA Images and Media guidance portal",
+          "url": "https://www.nasa.gov/nasa-brand-center/images-and-media/"
+        }
+      ],
+      "research_summary": "The project uses an exact, publicly cataloged NASA recap. NASA says agency content generally is not subject to U.S. copyright, while warning that identifiable people, protected identifiers, endorsement, and marked third-party content require separate review.",
+      "evidence_gaps": ["The public catalog record does not provide a component-level cue sheet or third-party-material schedule."],
+      "unresolved_questions": ["Does the selected edit retain any separately licensed music, graphics, or crowd material?"],
+      "recommended_actions": ["Attach the catalog record, checksum, NASA usage guidance, and a frame-accurate usage log to the production packet."],
+      "public_domain_status": "Generally not subject to U.S. copyright as NASA content; exceptions and non-copyright restrictions remain possible.",
+      "known_disputes": "None identified in the catalog or reviewed guidance.",
+      "overall_confidence": "high"
+    },
+    "Bill Nelson": {
+      "source_keys": ["exact_asset", "nasa_media", "bill_nelson"],
+      "candidate_rights_holders": [
+        {
+          "name": "Bill Nelson",
+          "role": "identifiable person appearing and speaking in the footage",
+          "rights_implicated": ["name", "likeness", "voice", "right of publicity or privacy depending on use"],
+          "share": "Personal rights are use- and jurisdiction-dependent",
+          "confidence": "high",
+          "basis": "NASA’s biography confirms the identity and term shown in the lower third; NASA’s media guidance flags identifiable-person issues for commercial use."
+        }
+      ],
+      "licensing_routes": [
+        {
+          "organization": "Production counsel / NASA Office of Communications",
+          "route": "Determine whether the factual excerpt needs a separate likeness release for the intended commercial and promotional contexts.",
+          "contact": "nasa-entertainment-collaborations@mail.nasa.gov",
+          "url": "https://www.nasa.gov/collaborating-with-nasa/film-and-documentary-guidelines/"
+        }
+      ],
+      "research_summary": "Bill Nelson is clearly identifiable by face, voice, name, and his then-current NASA title. NASA’s official biography verifies the historical title, while the agency’s media guidance warns that commercial use involving identifiable people may require permission.",
+      "evidence_gaps": ["No release or use-specific consent is attached to the project."],
+      "unresolved_questions": ["Is the use editorial within the film only, or will Nelson’s image or quote appear in advertising, thumbnails, or merchandise?"],
+      "recommended_actions": ["Have counsel assess the intended use and jurisdiction; request written direction before promotional use of the excerpt."],
+      "public_domain_status": "Government footage status does not eliminate a separate likeness/publicity analysis.",
+      "known_disputes": "None identified in the reviewed sources.",
+      "overall_confidence": "high"
+    },
+    "European Space Agency": {
+      "source_keys": ["exact_asset", "artemis_mission", "esa_orion"],
+      "candidate_rights_holders": [
+        {
+          "name": "European Space Agency",
+          "role": "provider of Orion’s European Service Module and official subject-matter source",
+          "rights_implicated": ["agency name and attribution", "potential ESA-supplied imagery", "partner credit"],
+          "share": "Component source not itemized in NASA’s recap catalog",
+          "confidence": "medium",
+          "basis": "ESA’s official Orion page confirms its role; the exact origin of each spacecraft shot in the NASA edit is not itemized."
+        }
+      ],
+      "licensing_routes": [
+        {
+          "organization": "European Space Agency Media Relations",
+          "route": "Confirm attribution and whether the selected Orion imagery includes ESA-supplied material with separate terms.",
+          "contact": "ESA official contact directory",
+          "url": "https://www.esa.int/About_Us/Contacts"
+        }
+      ],
+      "research_summary": "ESA is verified as the provider of Orion’s European Service Module. The NASA recap names and depicts the module, but its catalog does not identify the source agency for each spacecraft image or animation.",
+      "evidence_gaps": ["Shot-level image credits are absent from the public recap catalog record."],
+      "unresolved_questions": ["Which Orion shots or animations, if any, were supplied by ESA or an industrial partner?"],
+      "recommended_actions": ["Request a shot-level credit confirmation and record the required NASA/ESA attribution in the packet."],
+      "public_domain_status": "Not established for any ESA-originated component; do not extend NASA’s U.S. government-media status by inference.",
+      "known_disputes": "None identified.",
+      "overall_confidence": "medium"
+    },
+    "Unidentified musical score": {
+      "source_keys": ["exact_asset", "nasa_media"],
+      "candidate_rights_holders": [
+        {
+          "name": "Unconfirmed soundtrack rights holder",
+          "role": "composition and/or master owner not named in the public catalog record",
+          "rights_implicated": ["musical composition", "sound recording", "synchronization and master use"],
+          "share": "Unknown",
+          "confidence": "low",
+          "basis": "Music is audible throughout, while the exact NASA catalog record and official captions do not identify a cue, composer, publisher, or label."
+        }
+      ],
+      "licensing_routes": [
+        {
+          "organization": "NASA Office of Communications",
+          "route": "Request the recap’s cue sheet or written confirmation of soundtrack reuse rights before relying on the asset’s general media status.",
+          "contact": "NASA Images and Media guidance portal",
+          "url": "https://www.nasa.gov/nasa-brand-center/images-and-media/"
+        }
+      ],
+      "research_summary": "The score is clearly audible but remains unidentified. NASA warns that third-party material may be used on its sites under permission that does not transfer to downstream users, so the music should remain red until provenance is documented.",
+      "evidence_gaps": ["No cue sheet, composer, publisher, label, or license scope was found in the public catalog record."],
+      "unresolved_questions": ["Was the music commissioned by NASA, placed under a transferable license, or licensed only for the original recap?"],
+      "recommended_actions": ["Obtain a cue sheet or replace the soundtrack with production-controlled music before final delivery."],
+      "public_domain_status": "Unknown; do not infer that music is public domain from the government source of the surrounding footage.",
+      "known_disputes": "None researched because the work is not yet identified.",
+      "overall_confidence": "low"
+    },
+    "Kennedy Space Center visitor signage": {
+      "source_keys": ["exact_asset", "nasa_brand", "pad_39b"],
+      "candidate_rights_holders": [
+        {
+          "name": "NASA Office of Communications",
+          "role": "primary public contact for NASA identifiers visible in the visitor-area shot",
+          "rights_implicated": ["facility signage", "NASA identifier", "incidental third-party apparel"],
+          "share": "Operator and apparel ownership not established",
+          "confidence": "medium",
+          "basis": "NASA owns the agency identifier and verifies the location, but the public asset record does not identify every sign or garment operator."
+        }
+      ],
+      "licensing_routes": [
+        {
+          "organization": "NASA Office of Communications",
+          "route": "Provide the representative frame and ask whether any visitor-complex or third-party identifier needs separate routing.",
+          "contact": "agency-brand@nasa.gov",
+          "url": "https://www.nasa.gov/nasa-brand-center/brand-guidelines/"
+        }
+      ],
+      "research_summary": "NASA and Space Center identifiers are legible in a brief crowd shot. The agency brand route is established; ownership of every visitor-area sign and branded garment is not established from the footage alone.",
+      "evidence_gaps": ["No operator list or product-identification log is attached for the crowd shot."],
+      "unresolved_questions": ["Is the shot incidental enough for the intended edit, or will it be isolated in promotional frames?"],
+      "recommended_actions": ["Retain the frame in the log, avoid promotional isolation, and route any featured use through NASA’s brand contact."],
+      "public_domain_status": "Not a public-domain determination; signage and identifiers require their own contextual review.",
+      "known_disputes": "None identified.",
+      "overall_confidence": "medium"
+    }
+  }
+}

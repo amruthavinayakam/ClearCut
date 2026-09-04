@@ -1,0 +1,10 @@
+{
+  "/_not-found/page": "/_not-found",
+  "/_global-error/page": "/_global-error",
+  "/(product)/projects/new/page": "/projects/new",
+  "/(product)/projects/[projectId]/packet/page": "/projects/[projectId]/packet",
+  "/(product)/page": "/",
+  "/(product)/projects/[projectId]/page": "/projects/[projectId]",
+  "/(product)/projects/[projectId]/revisions/new/page": "/projects/[projectId]/revisions/new",
+  "/(product)/projects/[projectId]/revisions/[revisionId]/page": "/projects/[projectId]/revisions/[revisionId]"
+}
