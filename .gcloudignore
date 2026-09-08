@@ -8,6 +8,8 @@ node_modules/
 **/node_modules/
 
 # Retired Python/Vite stack — not part of the Bun build.
+# Leading slashes matter: a bare `Dockerfile` would also exclude
+# apps/api/Dockerfile and apps/web/Dockerfile, which are the ones we build.
 .venv/
 __pycache__/
 **/__pycache__/
@@ -16,11 +18,11 @@ __pycache__/
 backend/
 frontend/
 tools/
-requirements.txt
-requirements-dev.txt
-pytest.ini
-Dockerfile
-deploy.ps1
+/requirements.txt
+/requirements-dev.txt
+/pytest.ini
+/Dockerfile
+/deploy.ps1
 
 # Build output — rebuilt inside the image.
 .next/

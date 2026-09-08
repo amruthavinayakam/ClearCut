@@ -4,27 +4,13 @@
 # validate every uploaded rough cut, and services/uploads.ts turns a missing
 # binary into a silent `unreadable_container` rejection. Without it the whole
 # page-to-screen half of the product fails closed in production.
+#
+# Dependencies are installed *after* the workspace source is in place. Installing
+# from manifests alone and copying node_modules across stages produces
+# @clearcut/* symlinks that Cloud Build's classic builder does not carry over,
+# and the container dies with "Cannot find module '@clearcut/integrations'".
 
-FROM oven/bun:1.3.8 AS deps
-WORKDIR /app
-
-# Every workspace manifest must be present before a frozen-lockfile install:
-# Bun resolves the whole workspace graph, not just the app being shipped.
-COPY package.json bun.lock tsconfig.base.json ./
-COPY apps/api/package.json ./apps/api/
-COPY apps/edge/package.json ./apps/edge/
-COPY apps/web/package.json ./apps/web/
-COPY packages/contracts/package.json ./packages/contracts/
-COPY packages/domain/package.json ./packages/domain/
-COPY packages/integrations/package.json ./packages/integrations/
-COPY packages/ui/package.json ./packages/ui/
-
-# --production drops every workspace's devDependencies (playwright, wrangler,
-# vitest, the Next toolchain). The API needs none of them at runtime and they
-# dominate the image size, which is what Cloud Run cold starts pay for.
-RUN bun install --frozen-lockfile --production
-
-FROM oven/bun:1.3.8 AS release
+FROM oven/bun:1.3.8
 WORKDIR /app
 
 RUN apt-get update \
@@ -32,11 +18,14 @@ RUN apt-get update \
     && apt-get clean \
     && rm -rf /var/lib/apt/lists/*
 
-COPY --from=deps /app/node_modules ./node_modules
 COPY package.json bun.lock tsconfig.base.json ./
-COPY apps/api ./apps/api
 COPY packages ./packages
+COPY apps/api ./apps/api
+COPY apps/edge/package.json ./apps/edge/
+COPY apps/web/package.json ./apps/web/
 COPY fixtures ./fixtures
+
+RUN bun install --frozen-lockfile --production
 
 ENV NODE_ENV=production
 # Cloud Run injects PORT and requires the process to bind 0.0.0.0, not loopback.
