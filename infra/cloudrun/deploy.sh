@@ -65,11 +65,11 @@ build_image() {
 }
 
 # --- Secrets -----------------------------------------------------------------
-# Created empty on first run; add versions with:
-#   printf 'VALUE' | gcloud secrets versions add NAME --data-file=-
-for secret in google-api-key parallel-api-key parallel-webhook-secret; do
+# Gemini needs no secret: it runs on Vertex AI under the runtime service account.
+# Only Parallel ships a key.
+for secret in parallel-api-key parallel-webhook-secret; do
   if ! gcloud secrets describe "$secret" >/dev/null 2>&1; then
-    echo "--> Creating secret $secret (add a version before the app can run live)"
+    echo "--> Creating secret $secret"
     gcloud secrets create "$secret" --replication-policy=automatic --quiet
   fi
 done
@@ -78,7 +78,7 @@ PROJECT_NUMBER="$(gcloud projects describe "$PROJECT_ID" --format='value(project
 RUNTIME_SA="${PROJECT_NUMBER}-compute@developer.gserviceaccount.com"
 
 echo "--> Granting the runtime service account access to the secrets"
-for secret in google-api-key parallel-api-key parallel-webhook-secret; do
+for secret in parallel-api-key parallel-webhook-secret; do
   gcloud secrets add-iam-policy-binding "$secret" \
     --member="serviceAccount:${RUNTIME_SA}" \
     --role="roles/secretmanager.secretAccessor" \
@@ -87,8 +87,9 @@ done
 
 # Cloud Build runs as the compute service account and needs to push images and
 # write logs. Without these the build fails with an opaque permissions error.
-echo "--> Granting the build service account push and logging rights"
-for role in roles/artifactregistry.writer roles/logging.logWriter; do
+echo "--> Granting the build and runtime service account its roles"
+# aiplatform.user is what lets the API call Gemini on Vertex without a key.
+for role in roles/artifactregistry.writer roles/logging.logWriter roles/aiplatform.user; do
   gcloud projects add-iam-policy-binding "$PROJECT_ID" \
     --member="serviceAccount:${RUNTIME_SA}" \
     --role="$role" \
@@ -99,26 +100,31 @@ done
 # Live mode refuses to boot without provider keys, so a secret with no version
 # would produce a container that crash-loops behind a healthy-looking deploy.
 # Fail here instead, with the command that fixes it.
-missing=()
-for secret in google-api-key parallel-api-key; do
-  if [ -z "$(gcloud secrets versions list "$secret" --limit 1 --format='value(name)' 2>/dev/null)" ]; then
-    missing+=("$secret")
-  fi
-done
-if [ ${#missing[@]} -gt 0 ]; then
+# Live mode needs the Parallel key. Without it the container would crash-loop
+# behind a deploy that otherwise looks healthy, so fall back to fixture mode and
+# say so plainly rather than shipping something broken.
+MOCK_RESEARCH="false"
+if [ -z "$(gcloud secrets versions list parallel-api-key --limit 1 --format='value(name)' 2>/dev/null)" ]; then
+  MOCK_RESEARCH="true"
   echo
-  echo "The following secrets have no value yet: ${missing[*]}"
-  echo "Add them, then re-run this script:"
-  for secret in "${missing[@]}"; do
-    echo "  printf 'YOUR_KEY' | gcloud secrets versions add ${secret} --data-file=-"
-  done
-  exit 1
+  echo "!! parallel-api-key has no value, so this deploys in FIXTURE mode."
+  echo "   Research results will be replayed, not researched."
+  echo "   To go live, add the key and flip one variable:"
+  echo "     printf 'YOUR_KEY' | gcloud secrets versions add parallel-api-key --data-file=-"
+  echo "     gcloud run services update ${API_SERVICE} --region ${REGION} --update-env-vars MOCK_RESEARCH=false"
+  echo
 fi
 
 # The webhook secret is ours to generate rather than fetch.
 if [ -z "$(gcloud secrets versions list parallel-webhook-secret --limit 1 --format='value(name)' 2>/dev/null)" ]; then
   echo "--> Generating a Parallel webhook secret"
   openssl rand -hex 32 | tr -d '\n' | gcloud secrets versions add parallel-webhook-secret --data-file=- --quiet >/dev/null
+fi
+
+# A secret with no version cannot be mounted, so only reference what exists.
+API_SECRETS="PARALLEL_WEBHOOK_SECRET=parallel-webhook-secret:latest"
+if [ "$MOCK_RESEARCH" = "false" ]; then
+  API_SECRETS="PARALLEL_API_KEY=parallel-api-key:latest,${API_SECRETS}"
 fi
 
 # --- API ---------------------------------------------------------------------
@@ -147,8 +153,8 @@ gcloud run deploy "$API_SERVICE" \
   --min-instances 1 \
   --max-instances 1 \
   --no-cpu-throttling \
-  --set-env-vars "NODE_ENV=production,MOCK_RESEARCH=false,GEMINI_MODEL=gemini-3.8-flash,RESEARCH_CONCURRENCY=16,ASSET_STORAGE_DIR=/tmp/clearcut-assets" \
-  --set-secrets "GOOGLE_API_KEY=google-api-key:latest,PARALLEL_API_KEY=parallel-api-key:latest,PARALLEL_WEBHOOK_SECRET=parallel-webhook-secret:latest" \
+  --set-env-vars "NODE_ENV=production,MOCK_RESEARCH=${MOCK_RESEARCH},GEMINI_MODEL=gemini-3.8-flash,GOOGLE_CLOUD_PROJECT=${PROJECT_ID},GOOGLE_CLOUD_LOCATION=global,RESEARCH_CONCURRENCY=16,ASSET_STORAGE_DIR=/tmp/clearcut-assets" \
+  --set-secrets "$API_SECRETS" \
   --quiet
 
 API_URL="$(gcloud run services describe "$API_SERVICE" --region "$REGION" --format='value(status.url)')"
