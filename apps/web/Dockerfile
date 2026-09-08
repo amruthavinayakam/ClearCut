@@ -6,30 +6,26 @@
 # server fail with "Expected CommonJS module to have a function wrapper".
 # This is scoped to the Next.js process only — the API, and every ADK/Gemini/
 # Parallel call in it, runs on Bun.
-
-FROM oven/bun:1.3.8 AS deps
-WORKDIR /app
-
-# Frozen-lockfile installs resolve the whole workspace graph, so every manifest
-# has to be present before `bun install` runs.
-COPY package.json bun.lock tsconfig.base.json ./
-COPY apps/api/package.json ./apps/api/
-COPY apps/edge/package.json ./apps/edge/
-COPY apps/web/package.json ./apps/web/
-COPY packages/contracts/package.json ./packages/contracts/
-COPY packages/domain/package.json ./packages/domain/
-COPY packages/integrations/package.json ./packages/integrations/
-COPY packages/ui/package.json ./packages/ui/
-
-RUN bun install --frozen-lockfile
+#
+# Both tools live in one build stage so `bun install` runs with the workspace
+# source present. Installing from manifests alone and copying node_modules
+# across stages loses the @clearcut/* workspace symlinks under Cloud Build's
+# classic builder.
 
 FROM node:24-slim AS build
 WORKDIR /app
 
-# Carry over every node_modules tree, not just the root one: Bun installs
-# per-workspace, and `next` itself lives in apps/web/node_modules.
-COPY --from=deps /app ./
-COPY . .
+RUN npm install -g bun@1.3.8
+
+COPY package.json bun.lock tsconfig.base.json ./
+COPY packages ./packages
+COPY apps/web ./apps/web
+COPY apps/api/package.json ./apps/api/
+COPY apps/edge/package.json ./apps/edge/
+# next build type-checks the colocated component tests, which import this.
+COPY fixtures ./fixtures
+
+RUN bun install --frozen-lockfile
 
 ENV NEXT_TELEMETRY_DISABLED=1
 RUN cd apps/web && node node_modules/next/dist/bin/next build --webpack

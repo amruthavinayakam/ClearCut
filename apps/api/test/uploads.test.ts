@@ -35,6 +35,8 @@ describe("upload preflight", () => {
         researchConcurrency: 4,
         googleApiKey: "",
         geminiModel: "gemini-3.8-flash",
+        googleCloudProject: "",
+        googleCloudLocation: "us-central1",
         parallelApiKey: "",
         parallelProcessor: "core",
         parallelMonitorProcessor: "lite",
