@@ -1,3 +1,5 @@
+import Parallel from "parallel-web";
+
 import {
   EvidenceSourceSchema,
   MonitorRecordSchema,
@@ -159,7 +161,8 @@ export class FixtureParallelClient implements ParallelClient {
 }
 
 export class LiveParallelClient implements ParallelClient {
-  readonly #request: RequestFunction;
+  readonly #request?: RequestFunction;
+  readonly #client?: Parallel;
   readonly #processor: string;
   readonly #monitorProcessor: string;
   readonly #publicBaseUrl: string;
@@ -175,35 +178,26 @@ export class LiveParallelClient implements ParallelClient {
     this.#processor = options.processor ?? "core";
     this.#monitorProcessor = options.monitorProcessor ?? "lite";
     this.#publicBaseUrl = options.publicBaseUrl ?? "";
-    this.#request = options.request ?? (async (operation, input) => {
-      const endpoints: Record<string, [string, string]> = {
-        search: ["POST", "/v1/search"],
-        task_create: ["POST", "/v1/tasks/runs"],
-        monitor_create: ["POST", "/v1/monitors"],
-      };
-      let method = "GET";
-      let path = "";
-      if (operation.startsWith("task_result:")) path = `/v1/tasks/runs/${operation.slice(12)}/result`;
-      else if (operation.startsWith("monitor_events:")) path = `/v1/monitors/${operation.slice(15)}/events`;
-      else [method, path] = endpoints[operation] ?? ["GET", ""];
-      if (!path) throw new Error(`Unsupported Parallel operation: ${operation}`);
-      const response = await fetch(`https://api.parallel.ai${path}`, {
-        method,
-        headers: { "content-type": "application/json", "x-api-key": options.apiKey },
-        body: method === "POST" ? JSON.stringify(input) : undefined,
-      });
-      if (!response.ok) throw new Error(`Parallel ${operation} failed (${response.status}): ${await response.text()}`);
-      return response.json();
-    });
+    this.#request = options.request;
+    // The official SDK is the runtime path; `request` stays an injection point for tests.
+    if (!options.request) this.#client = new Parallel({ apiKey: options.apiKey });
+  }
+
+  /** Routes one Parallel call through the SDK, or through an injected request in tests. */
+  async #call<T>(operation: string, input: unknown, viaSdk: (client: Parallel) => Promise<T>): Promise<T> {
+    if (this.#request) return await this.#request(operation, input) as T;
+    return viaSdk(this.#client!);
   }
 
   async searchClearanceItem(item: ClearanceItem, productionTitle: string, sessionId: string) {
-    const raw = await this.#request("search", {
+    const objective = `Identify who currently controls rights to ${item.name} (${item.category}) and the official permission route for the film production ${productionTitle}. Prefer primary sources and do not infer ownership.`;
+    const params = {
       search_queries: queries(item),
-      objective: `Identify who currently controls rights to ${item.name} (${item.category}) and the official permission route for the film production ${productionTitle}. Prefer primary sources and do not infer ownership.`,
+      objective,
       max_chars_total: 12_000,
       session_id: sessionId,
-    }) as { results?: unknown[] };
+    };
+    const raw = await this.#call("search", params, (client) => client.search(params)) as { results?: unknown[] };
     return (raw.results ?? []).flatMap((entry) => {
       const row = entry as Record<string, unknown>;
       if (typeof row.url !== "string") return [];
@@ -220,14 +214,16 @@ export class LiveParallelClient implements ParallelClient {
   }
 
   async buildDossier(item: ClearanceItem, productionTitle: string, sources: EvidenceSource[]) {
-    const created = await this.#request("task_create", {
+    const params = {
       input: dossierInput(item, productionTitle, sources),
       processor: this.#processor,
-      task_spec: { output_schema: { type: "json", json_schema: DossierSchema.omit({ run_id: true, basis: true }).toJSONSchema() } },
+      task_spec: { output_schema: { type: "json" as const, json_schema: DossierSchema.omit({ run_id: true, basis: true }).toJSONSchema() } },
       metadata: { item_id: item.id, category: item.category, project: "clearcut" },
-    }) as { run_id?: string };
+    };
+    const created = await this.#call("task_create", params, (client) => client.taskRun.create(params)) as { run_id?: string };
     if (!created.run_id) throw new Error("Parallel Task did not return a run_id.");
-    const result = await this.#request(`task_result:${created.run_id}`, {}) as {
+    const runId = created.run_id;
+    const result = await this.#call(`task_result:${runId}`, {}, (client) => client.taskRun.result(runId)) as {
       output?: { content?: unknown; basis?: unknown };
     };
     const content = typeof result.output?.content === "string"
@@ -244,16 +240,17 @@ export class LiveParallelClient implements ParallelClient {
   async createMonitor(item: ClearanceItem, _productionTitle: string, projectId: string, frequency: string) {
     const webhook = this.#publicBaseUrl ? {
       url: `${this.#publicBaseUrl.replace(/\/$/, "")}/api/webhooks/parallel`,
-      event_types: ["monitor.event.detected"],
+      event_types: ["monitor.event.detected" as const],
     } : undefined;
-    const raw = await this.#request("monitor_create", {
-      type: "event_stream",
+    const params = {
+      type: "event_stream" as const,
       frequency,
-      processor: this.#monitorProcessor,
+      processor: this.#monitorProcessor as "lite" | "base",
       settings: { query: monitorQuery(item), include_backfill: true },
       metadata: { project_id: projectId, item_id: item.id, external_id: `clearcut-${item.id}` },
       ...(webhook ? { webhook } : {}),
-    }) as Record<string, unknown>;
+    };
+    const raw = await this.#call("monitor_create", params, (client) => client.monitor.create(params)) as unknown as Record<string, unknown>;
     return MonitorRecordSchema.parse({
       monitor_id: raw.monitor_id,
       project_id: projectId,
@@ -268,7 +265,11 @@ export class LiveParallelClient implements ParallelClient {
   }
 
   async readMonitorEvents(monitorId: string) {
-    const raw = await this.#request(`monitor_events:${monitorId}`, {}) as { events?: unknown[] };
+    const raw = await this.#call(
+      `monitor_events:${monitorId}`,
+      {},
+      (client) => client.monitor.events(monitorId),
+    ) as { events?: unknown[] };
     return (raw.events ?? []).map((entry) => {
       const row = entry as Record<string, unknown>;
       const output = (row.output ?? {}) as Record<string, unknown>;

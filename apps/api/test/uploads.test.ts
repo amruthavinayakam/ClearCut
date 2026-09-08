@@ -34,7 +34,7 @@ describe("upload preflight", () => {
         mockResearch: true,
         researchConcurrency: 4,
         googleApiKey: "",
-        geminiModel: "gemini-2.5-flash",
+        geminiModel: "gemini-3.8-flash",
         parallelApiKey: "",
         parallelProcessor: "core",
         parallelMonitorProcessor: "lite",

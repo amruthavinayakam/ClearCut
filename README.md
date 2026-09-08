@@ -28,8 +28,10 @@ rough cut ───┘                                      │
                                                    └─ Parallel Monitor → reopen on change
 ```
 
+Every Gemini stage is a Google **Agent Development Kit** agent. `LlmAgent` owns the instruction, the model binding, and the Zod schema its answer must satisfy; an ADK `Runner` drives it to a final response over a session. The agents are defined in [`packages/integrations/src/gemini/client.ts`](packages/integrations/src/gemini/client.ts): `screenplay_scanner`, `cut_scanner`, `page_to_screen_reconciler`, and `clearance_copilot`.
+
 - **Gemini screenplay scan** extracts named and generic clearable candidates with page and scene anchors.
-- **Gemini cut scan** returns timecoded visual/audio candidates and readable on-screen text.
+- **Gemini cut scan** returns timecoded visual/audio candidates and readable on-screen text. Cuts within the inline ceiling travel in the request body; larger ones are staged through the Gemini Files API so a feature-length cut is analysable.
 - **Reconciliation** distinguishes elements found in both sources from script-only, cut-only, and materially changed uses.
 - **Parallel Search** retrieves public evidence and citations.
 - **Parallel Task** returns a schema-validated dossier with candidate holders, possible contact routes, evidence gaps, and next human actions.
@@ -48,9 +50,9 @@ Late research cannot overwrite a human disposition. Revision application is pred
 
 - **Web:** Next.js 16 App Router, React 19, TypeScript, Tailwind CSS 4, shadcn/Base UI, Geist Sans and Geist Mono
 - **API:** Bun, Hono, Zod, shared TypeScript contracts
-- **Agents:** Gemini multimodal analysis; Parallel Search, Task, and Monitor
+- **Agents:** Google ADK (`@google/adk`) agents on Gemini via `@google/genai`; Parallel Search, Task, and Monitor via the official `parallel-web` SDK
 - **Local persistence:** in-memory project records plus opaque filesystem assets in `.clearcut/assets`
-- **Cloudflare path:** OpenNext Workers for the web, an edge Worker for API routing/direct R2 uploads, D1/R2 repositories, and a Bun API runtime
+- **Production path:** two Google Cloud Run services — a Bun API container and a Next.js standalone container that proxies `/api/*` to it
 - **Live progress:** typed Server-Sent Events with polling recovery
 
 The monorepo keeps API schemas in [`packages/contracts`](packages/contracts), invariant-heavy logic in [`packages/domain`](packages/domain), provider clients in [`packages/integrations`](packages/integrations), and reusable UI primitives in [`packages/ui`](packages/ui).
@@ -77,7 +79,7 @@ Fixture mode is explicit and every human-facing fixture value is prefixed `MOCK:
 | Variable | Default | Purpose |
 |---|---:|---|
 | `GOOGLE_API_KEY` | — | Google AI Studio key for live Gemini analysis |
-| `GEMINI_MODEL` | `gemini-2.5-flash` | Gemini model used for structured multimodal output |
+| `GEMINI_MODEL` | `gemini-3.8-flash` | Gemini model used for structured multimodal output |
 | `PARALLEL_API_KEY` | — | Parallel Search, Task, and Monitor key |
 | `PARALLEL_PROCESSOR` | `core` | Structured Task processor |
 | `PARALLEL_MONITOR_PROCESSOR` | `lite` | Monitor processor |
@@ -100,6 +102,27 @@ bun run build
 ```
 
 The automated suites cover shared contracts, status ownership, recorded document scope, immutable revisions, packet idempotency, provider validation, API lifecycle and security, Cloudflare routing, and the main Next.js product surfaces. The running application is additionally browser-verified through intake, review, citations, monitored cases, packet export, Version Ripple, and mobile layout.
+
+## Deploy
+
+Two Cloud Run services, built from `apps/api/Dockerfile` and `apps/web/Dockerfile`:
+
+```bash
+gcloud auth login
+./infra/cloudrun/deploy.sh YOUR_PROJECT_ID us-central1
+```
+
+Before the first deploy, add the provider keys to Secret Manager — the script creates the secrets but cannot fill them, and live mode refuses to boot without them:
+
+```bash
+printf 'YOUR_KEY' | gcloud secrets versions add google-api-key --data-file=-
+printf 'YOUR_KEY' | gcloud secrets versions add parallel-api-key --data-file=-
+openssl rand -hex 32 | tr -d '\n' | gcloud secrets versions add parallel-webhook-secret --data-file=-
+```
+
+Three service settings are load-bearing rather than tuning choices. `--no-cpu-throttling` keeps CPU allocated after a response is sent, because the clearance pipeline is started with `queueMicrotask` once the HTTP response has already gone out. `--min-instances=1 --max-instances=1` pins one instance, because project records and the SSE event bus are in-memory. `--timeout=3600` covers long-lived SSE streams.
+
+The web service proxies `/api/*` through a streaming route handler rather than a Next.js rewrite: Next 16's rewrite proxy buffers `text/event-stream` bodies and currently fails against an absolute external origin in a standalone build.
 
 ## Limits
 

@@ -1,0 +1,25 @@
+# Builds one ClearCut image from an explicitly named Dockerfile.
+#
+# The repo root still holds a Dockerfile from the retired Python stack, so the
+# Dockerfile is always selected by path here rather than discovered. The build
+# context is the repo root because both images install from the workspace
+# lockfile and copy shared packages.
+#
+# Invoked by infra/cloudrun/deploy.sh with _DOCKERFILE and _IMAGE substitutions.
+
+steps:
+  - name: gcr.io/cloud-builders/docker
+    args:
+      - build
+      - --file=${_DOCKERFILE}
+      - --tag=${_IMAGE}
+      - .
+
+images:
+  - ${_IMAGE}
+
+options:
+  machineType: E2_HIGHCPU_8
+  logging: CLOUD_LOGGING_ONLY
+
+timeout: 1800s

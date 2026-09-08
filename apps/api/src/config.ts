@@ -34,7 +34,7 @@ export function readConfig(env: Record<string, string | undefined> = process.env
     mockResearch: env.MOCK_RESEARCH?.toLocaleLowerCase() === "true",
     researchConcurrency: positiveInteger(env.RESEARCH_CONCURRENCY, 16),
     googleApiKey: env.GOOGLE_API_KEY?.trim() ?? "",
-    geminiModel: env.GEMINI_MODEL?.trim() ?? "gemini-2.5-flash",
+    geminiModel: env.GEMINI_MODEL?.trim() ?? "gemini-3.8-flash",
     parallelApiKey: env.PARALLEL_API_KEY?.trim() ?? "",
     parallelProcessor: env.PARALLEL_PROCESSOR?.trim() ?? "core",
     parallelMonitorProcessor: env.PARALLEL_MONITOR_PROCESSOR?.trim() ?? "lite",

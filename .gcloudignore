@@ -1,0 +1,44 @@
+# Cloud Build uploads this directory as the build context. Keep it to source.
+# Both Dockerfiles run `bun install` themselves, so no installed deps are needed.
+
+.git/
+.gitignore
+
+node_modules/
+**/node_modules/
+
+# Retired Python/Vite stack — not part of the Bun build.
+.venv/
+__pycache__/
+**/__pycache__/
+*.py[cod]
+.pytest_cache/
+backend/
+frontend/
+tools/
+requirements.txt
+requirements-dev.txt
+pytest.ini
+Dockerfile
+deploy.ps1
+
+# Build output — rebuilt inside the image.
+.next/
+**/.next/
+.open-next/
+**/.open-next/
+dist/
+**/dist/
+*.tsbuildinfo
+
+# Local state and secrets.
+.env
+.env.local
+.clearcut/
+.wrangler/
+**/.wrangler/
+
+# Docs and planning material.
+docs/
+*.md
+!README.md
