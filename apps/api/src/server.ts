@@ -20,7 +20,15 @@ const monitors = new MemoryMonitorRepository();
 const events = new ProjectEventBus();
 const gemini = config.mockResearch
   ? new FixtureGeminiClient()
-  : new LiveGeminiClient({ apiKey: config.googleApiKey, model: config.geminiModel });
+  : new LiveGeminiClient({
+    apiKey: config.googleApiKey,
+    // Prefer Vertex AI when a project is configured: it authenticates with the
+    // runtime's own service account, so no key ships with the deployment.
+    vertex: config.googleCloudProject
+      ? { project: config.googleCloudProject, location: config.googleCloudLocation }
+      : undefined,
+    model: config.geminiModel,
+  });
 const parallel = config.mockResearch
   ? new FixtureParallelClient()
   : new LiveParallelClient({

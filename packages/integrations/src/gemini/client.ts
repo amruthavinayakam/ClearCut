@@ -172,24 +172,61 @@ function firstJsonObject(text: string): unknown {
   }
 }
 
+/**
+ * Where the Gemini calls are billed and authenticated.
+ *
+ * `vertex` runs against Vertex AI using the ambient service-account credentials,
+ * which is how this deploys on Cloud Run: no key travels with the app, and usage
+ * bills to the project. `apiKey` targets the Gemini Developer API and is the
+ * convenient local path.
+ */
+export type GeminiBackend =
+  | { kind: "apiKey"; apiKey: string }
+  | { kind: "vertex"; project: string; location: string };
+
 export class LiveGeminiClient implements GeminiClient {
   readonly #request?: RequestFunction;
-  readonly #apiKey: string;
+  readonly #backend: GeminiBackend;
   readonly #model: string;
   #genai?: GoogleGenAI;
 
-  constructor(options: { apiKey: string; model?: string; request?: RequestFunction }) {
-    if (!options.apiKey.trim()) throw new Error("GOOGLE_API_KEY is required for live Gemini mode.");
-    this.#apiKey = options.apiKey;
+  constructor(options: {
+    apiKey?: string;
+    vertex?: { project: string; location?: string };
+    model?: string;
+    request?: RequestFunction;
+  }) {
+    if (options.vertex?.project) {
+      this.#backend = {
+        kind: "vertex",
+        project: options.vertex.project,
+        location: options.vertex.location?.trim() || "global",
+      };
+    } else if (options.apiKey?.trim()) {
+      this.#backend = { kind: "apiKey", apiKey: options.apiKey };
+    } else {
+      throw new Error("Live Gemini mode needs GOOGLE_API_KEY, or GOOGLE_CLOUD_PROJECT for Vertex AI.");
+    }
     this.#model = options.model ?? "gemini-3.8-flash";
     this.#request = options.request;
+  }
+
+  #model_(): Gemini {
+    return this.#backend.kind === "vertex"
+      ? new Gemini({
+        model: this.#model,
+        vertexai: true,
+        project: this.#backend.project,
+        location: this.#backend.location,
+      })
+      : new Gemini({ model: this.#model, apiKey: this.#backend.apiKey });
   }
 
   /** Builds the ADK agent for one clearance stage. */
   #agent<T>(spec: AgentSpec, output: z.ZodType<T>): LlmAgent {
     return new LlmAgent({
       name: spec.agentName,
-      model: new Gemini({ model: this.#model, apiKey: this.#apiKey }),
+      model: this.#model_(),
       description: spec.description,
       instruction: `${GEMINI_SYSTEM}\n\n${spec.instruction}`,
       outputSchema: output as unknown as LlmAgentSchema,
@@ -211,12 +248,21 @@ export class LiveGeminiClient implements GeminiClient {
       sessionId,
       newMessage: createUserContent(parts),
     })) {
+      // A failed turn arrives as an ordinary event carrying an error code and no
+      // content. Surface it, rather than letting an empty answer fall through to
+      // the schema check and report itself as malformed output.
+      if (event.errorCode) {
+        throw new Error(`Gemini ${spec.agentName} failed (${event.errorCode}): ${event.errorMessage ?? "no message"}`);
+      }
       if (event.author !== spec.agentName) continue;
       const text = (event.content?.parts ?? [])
         .map((part) => part.text ?? "")
         .join("")
         .trim();
       if (text) answer = text;
+    }
+    if (!answer) {
+      throw new Error(`Gemini ${spec.agentName} returned no content.`);
     }
     return validateOutput("Gemini", output, firstJsonObject(answer));
   }
@@ -256,7 +302,9 @@ export class LiveGeminiClient implements GeminiClient {
     if (input.bytes.byteLength <= INLINE_MEDIA_LIMIT_BYTES) {
       return createPartFromBase64(base64(), input.mimeType);
     }
-    const ai = (this.#genai ??= new GoogleGenAI({ apiKey: this.#apiKey }));
+    const ai = (this.#genai ??= this.#backend.kind === "vertex"
+      ? new GoogleGenAI({ vertexai: true, project: this.#backend.project, location: this.#backend.location })
+      : new GoogleGenAI({ apiKey: this.#backend.apiKey }));
     let file = await ai.files.upload({
       file: new Blob([input.bytes as Uint8Array<ArrayBuffer>], { type: input.mimeType }),
       config: { mimeType: input.mimeType },

@@ -10,6 +10,8 @@ export type ApiConfig = {
   researchConcurrency: number;
   googleApiKey: string;
   geminiModel: string;
+  googleCloudProject: string;
+  googleCloudLocation: string;
   parallelApiKey: string;
   parallelProcessor: string;
   parallelMonitorProcessor: string;
@@ -35,6 +37,10 @@ export function readConfig(env: Record<string, string | undefined> = process.env
     researchConcurrency: positiveInteger(env.RESEARCH_CONCURRENCY, 16),
     googleApiKey: env.GOOGLE_API_KEY?.trim() ?? "",
     geminiModel: env.GEMINI_MODEL?.trim() ?? "gemini-3.8-flash",
+    // Set GOOGLE_CLOUD_PROJECT to bill Gemini through Vertex AI on the project's
+    // own credentials instead of carrying an API key. Cloud Run supplies these.
+    googleCloudProject: env.GOOGLE_CLOUD_PROJECT?.trim() ?? "",
+    googleCloudLocation: env.GOOGLE_CLOUD_LOCATION?.trim() ?? "global",
     parallelApiKey: env.PARALLEL_API_KEY?.trim() ?? "",
     parallelProcessor: env.PARALLEL_PROCESSOR?.trim() ?? "core",
     parallelMonitorProcessor: env.PARALLEL_MONITOR_PROCESSOR?.trim() ?? "lite",
