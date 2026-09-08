@@ -1,274 +1,138 @@
-# ◎ Clearance Radar
+# ClearCut
 
-**Every frame. Every right. Every change.**
+ClearCut is a multimodal clearance-research workspace for film and television. It scans a screenplay and rough cut, reconciles page-to-screen changes, researches candidate rights routes with citations, and keeps the evidence, production record, revision history, and human decisions in one auditable workspace.
 
-A screenplay gets cleared before the shoot. Then the rough cut arrives carrying
-a poster nobody planned for, a package design the prop department bought that
-morning, and a music cue that was never in the script. Delivery is Friday.
+**Research for human legal review. ClearCut does not issue legal clearance.**
 
-Clearance Radar compares the page against the screen, pins every unresolved
-element to its exact frame, researches who controls it with citations, and
-keeps watching for public changes. **Humans make every legal decision** — the
-agent cannot mark anything cleared, and that is enforced in the type system, the
-API, and the tests.
+Built for the Agentic Cinema hackathon and the Parallel track.
 
-Built for the **Agentic Cinema** hackathon — **Parallel track**.
+## Product flow
 
----
+1. **Create a production.** Upload a screenplay, a rough cut, or both. Each file is preflighted independently, so a valid input is preserved if the other fails.
+2. **Watch the agent pipeline.** Gemini extracts candidates from the page and picture, ClearCut reconciles them, and Parallel Search + Task research every case in parallel.
+3. **Review the evidence.** The workspace joins a case rail, timecoded picture, risk timeline, evidence graph, citations, candidate holders, licensing routes, and open questions.
+4. **Record the human outcome.** Coordinator and counsel actions require an attributable rationale. Approval-like states require a linked production document.
+5. **Attach the production record.** Licences, releases, permits, and correspondence retain media, territory, term, and covered-use metadata. ClearCut compares recorded scope without interpreting legal meaning.
+6. **Run Version Ripple.** Upload a changed script or cut and review `unchanged`, `added`, `removed`, `materially_changed`, and `decision_stale` outcomes before applying the candidate revision.
+7. **Export the packet.** Preview the current server-built research packet, including incomplete work, and explicitly confirm the audited Markdown export.
+8. **Keep watching.** Parallel Monitor can reopen a case when researched public facts change without overwriting prior human history.
 
-## What it does
+The interface is ultraminimal and technical: Geist Sans/Mono, compact neutral surfaces, graphite picture areas, a single blue action colour, and sparse semantic risk accents. It includes desktop and mobile shells, loading/error/empty states, keyboard navigation, and a `Cmd/Ctrl+K` command palette.
 
-```
-screenplay.pdf ──┐
-                 ├──► Gemini reads both ──► reconcile ──► research ──► human sign-off ──► monitor
-rough-cut.mp4 ───┘
-```
+## Agent system
 
-| Stage | What happens |
-|---|---|
-| **Script scan** | Gemini (ADK agent, structured output) extracts clearance candidates with scene, page, and verbatim excerpt. Generic mentions — "a photograph on the wall" — are flagged too, because production *will* hang a real one. |
-| **Cut scan** | Gemini reads the video directly and returns **timecoded** candidates, transcribing on-screen text so the element can actually be researched. |
-| **Reconcile** | Every item is classified `in_both`, `script_only`, `cut_only`, or `materially_changed`. |
-| **Research** | **Parallel Search** runs first for live cited retrieval, then **Parallel Task** builds a schema-validated dossier. |
-| **Review** | The agent stops at `evidence_ready`. A coordinator verifies; counsel signs off. |
-| **Monitor** | **Parallel Monitor** watches unresolved items and reopens them by webhook when the public picture changes. |
-
-### The two relationships that matter
-
-**`cut_only`** — it appeared on the day and nobody planned for it, so nothing has
-been researched. This is where productions get hurt.
-
-**`materially_changed`** — the script said *"a photograph of a harbour at night"*
-and the cut shows *"HARBOR LIGHTS, 1961 · est. of M. Vance"*. The generic
-reference needed no clearance. The specific work does. Nobody was warned.
-
-On the seeded demo, the reconciler produces exactly that finding, unprompted:
-
-> *"The script's generic 'photograph of a harbour at night' was realized as the
-> specific artwork 'HARBOR LIGHTS, 1961' by M. Vance."*
-
----
-
-## The safety property
-
-**The agent cannot approve anything.** Not "is instructed not to" — cannot.
-
-```python
-HUMAN_OWNED_STATUSES = frozenset({
-    "coordinator_verified", "counsel_approved",
-    "documented_permission", "approved_replacement", "false_positive",
-})
+```text
+screenplay ──┐
+             ├─ Gemini scan ─ reconcile ─ Parallel Search + Task ─ human review
+rough cut ───┘                                      │
+                                                   └─ Parallel Monitor → reopen on change
 ```
 
-`ClearanceItem.transition()` raises `ApprovalDenied` if the actor does not own
-the target status, and the agent calls it through the same path as everyone
-else — there is no privileged route. The API returns **403**. The UI has a
-button, *"Test: let the AI approve it"*, that fires `actor=agent` at a
-human-owned status so you can watch the server refuse it live.
+Every Gemini stage is a Google **Agent Development Kit** agent. `LlmAgent` owns the instruction, the model binding, and the Zod schema its answer must satisfy; an ADK `Runner` drives it to a final response over a session. The agents are defined in [`packages/integrations/src/gemini/client.ts`](packages/integrations/src/gemini/client.ts): `screenplay_scanner`, `cut_scanner`, `page_to_screen_reconciler`, and `clearance_copilot`.
 
-The test suite asserts it as a property, not an example:
+- **Gemini screenplay scan** extracts named and generic clearable candidates with page and scene anchors.
+- **Gemini cut scan** returns timecoded visual/audio candidates and readable on-screen text. Cuts within the inline ceiling travel in the request body; larger ones are staged through the Gemini Files API so a feature-length cut is analysable.
+- **Reconciliation** distinguishes elements found in both sources from script-only, cut-only, and materially changed uses.
+- **Parallel Search** retrieves public evidence and citations.
+- **Parallel Task** returns a schema-validated dossier with candidate holders, possible contact routes, evidence gaps, and next human actions.
+- **Parallel Monitor** watches unresolved public facts and can reopen a linked case through an authenticated webhook.
+- **ClearCut Copilot** explains the current stored record but cannot make human-owned dispositions.
 
-```
-PASS  no agent-reachable status is green
-PASS  agent refused 'counsel_approved'
-PASS  coordinator refused counsel_approved
-PASS  counsel may approve
-```
+The live clients are in [`packages/integrations/src`](packages/integrations/src), pipeline orchestration is in [`apps/api/src/pipeline`](apps/api/src/pipeline), and the UI flow is under [`apps/web/src`](apps/web/src).
 
-Unknown ownership can never come back green either. If research cannot
-establish a rights holder, the item goes to `unresolved` — you cannot licence
-what you cannot find.
+## Safety model
 
----
+Agent and system actors may research a case up to `evidence_ready`; they cannot set coordinator, counsel, permission, replacement, or false-positive outcomes. Human actions require a rationale, and document-dependent outcomes require a production record linked to the same case.
 
-## Where the platforms are actually used
+Late research cannot overwrite a human disposition. Revision application is predecessor-checked and idempotent. Packet previewing creates no audit event; a confirmed export does.
 
-Imported and called in code, not merely named:
+## Stack
 
-| | Where | What |
-|---|---|---|
-| **Parallel Search** | [`parallel_client.py`](backend/app/parallel_client.py) `search_evidence` | Live retrieval per item; results stream into the UI as they arrive |
-| **Parallel Search** | [`agents/copilot.py`](backend/app/agents/copilot.py) `parallel_live_search` | ADK `FunctionTool` — the copilot researches instead of guessing |
-| **Parallel Task** | [`parallel_client.py`](backend/app/parallel_client.py) `build_dossier` | Strict JSON schema, per-field `basis` citations |
-| **Parallel Monitor** | [`parallel_client.py`](backend/app/parallel_client.py) `create_item_monitor` | Event stream with backfill, so a new watch is not empty |
-| **Parallel webhook** | [`main.py`](backend/app/main.py) `/api/webhooks/parallel` | `monitor.event.detected` reopens the linked item |
-| **Gemini multimodal** | [`agents/cut_scan.py`](backend/app/agents/cut_scan.py) | Video in, timecoded detections out |
-| **Gemini + ADK** | [`script_scan`](backend/app/agents/script_scan.py), [`reconcile`](backend/app/agents/reconcile.py), [`drafting`](backend/app/agents/drafting.py), [`copilot`](backend/app/agents/copilot.py) | Four `LlmAgent`s, three with Pydantic `output_schema` |
-| **Cloud Run** | [`Dockerfile`](Dockerfile), [`deploy.ps1`](deploy.ps1) | One container serves API + UI |
-| **Secret Manager** | [`deploy.ps1`](deploy.ps1) | The Parallel key is never a console env var |
-| **Cloud Storage** | [`cut_scan.py`](backend/app/agents/cut_scan.py) | `GCS_BUCKET` set → Gemini reads the cut by URI instead of inline |
-| **Firestore** *(optional)* | [`store.py`](backend/app/store.py) | Projects and audit trail survive an instance restart |
+- **Web:** Next.js 16 App Router, React 19, TypeScript, Tailwind CSS 4, shadcn/Base UI, Geist Sans and Geist Mono
+- **API:** Bun, Hono, Zod, shared TypeScript contracts
+- **Agents:** Google ADK (`@google/adk`) agents on Gemini via `@google/genai`; Parallel Search, Task, and Monitor via the official `parallel-web` SDK
+- **Local persistence:** in-memory project records plus opaque filesystem assets in `.clearcut/assets`
+- **Production path:** two Google Cloud Run services — a Bun API container and a Next.js standalone container that proxies `/api/*` to it
+- **Live progress:** typed Server-Sent Events with polling recovery
 
----
+The monorepo keeps API schemas in [`packages/contracts`](packages/contracts), invariant-heavy logic in [`packages/domain`](packages/domain), provider clients in [`packages/integrations`](packages/integrations), and reusable UI primitives in [`packages/ui`](packages/ui).
 
-## Measured results on the seeded demo
+## Run locally
 
-The demo assets are generated by [`tools/generate_demo_assets.py`](tools/generate_demo_assets.py)
-with five deliberately planted elements, so recall is checkable rather than
-claimed.
-
-| | |
-|---|---|
-| Planted elements detected in the cut | **5 / 5** |
-| False positives | **0** |
-| Timecode accuracy | within **0.5 s** of ground truth |
-| Unscripted elements caught | **3 / 3** |
-| `materially_changed` correctly identified | **1 / 1** |
-| Sources cited across the project | **147** |
-| AI-issued approvals | **0** |
-
-The cut scanner transcribed on-screen text exactly — `MIDNIGHT ORCHARD / R.
-OKONKWO • 1974` — which is what makes the element researchable at all.
-
-It also correctly refuses to invent owners. `MIDNIGHT ORCHARD` is a fictional
-artwork, and research returned **zero** candidate holders and an honest list of
-gaps, including *"whether the physical framed print was rented, purchased,
-borrowed, or supplied by a prop house, and whether the production received any
-rights paperwork with it."*
-
----
-
-## Demo assets are original by construction
-
-A project about clearance must not ship uncleared third-party material. The
-screenplay, the rough cut, the brands (`NORTHSTAR COLA`), the artworks
-(`MIDNIGHT ORCHARD`, `HARBOR LIGHTS, 1961`), the signage (`THE VELVET ROOM`),
-and the instrumental music cue are all invented for this repo and rendered from
-code with Pillow, NumPy, and a bundled ffmpeg.
-
-```bash
-python tools/generate_demo_assets.py
-```
-
----
-
-## Running it
-
-### Prerequisites
-
-- Python 3.11+ and Node 20+
-- A Google Cloud project with billing enabled
-- A [Parallel](https://platform.parallel.ai) API key
-
-### Setup
-
-```bash
-cp .env.example .env
-```
-
-Fill in `GOOGLE_CLOUD_PROJECT` and `PARALLEL_API_KEY`, and set `MOCK_RESEARCH=false`.
-
-```bash
-gcloud auth application-default login
-```
-
-```bash
-gcloud services enable aiplatform.googleapis.com --project YOUR_PROJECT_ID
-```
-
-```bash
-python -m venv .venv && .venv/bin/pip install -r requirements.txt
-```
-
-```bash
-.venv/bin/python -m uvicorn backend.app.main:app --port 8080
-```
-
-The API now runs standalone; the UI is a separate Next.js app in
-[`apps/web`](apps/web) (deployed to Cloudflare Workers in production). To run
-it locally against the API above:
+Prerequisites: Bun 1.3+, `ffprobe`, and the existing Portless `.lcl` proxy.
 
 ```bash
 bun install
-CLEARCUT_API_ORIGIN=http://localhost:8080 bun --filter @clearcut/web dev
+cp .env.example .env
+MOCK_RESEARCH=true bun run dev
 ```
 
-Open the URL `next dev` prints and click **Run real sample**.
+Open:
 
-On Windows use `.venv\Scripts\python.exe`. If `gcloud` complains about Python
-2.7, set `CLOUDSDK_PYTHON` to a Python 3 executable.
+- Web: [https://clearcut.lcl](https://clearcut.lcl)
+- API health: [https://clearcut-api.lcl/api/health](https://clearcut-api.lcl/api/health)
 
-### Without credentials
-
-`MOCK_RESEARCH=true` serves Parallel from fixtures — the pipeline runs, no key,
-no bill. Every fixture value is prefixed `MOCK:` so it can never be mistaken for
-a sourced finding, and the UI shows a `mock research` badge. Google Cloud
-credentials are still required, because the scans are real Gemini calls.
-
-### Tests
-
-```bash
-python -m backend.tests.test_offline
-```
-
-55 checks, no credentials needed. Covers the approval invariant, status/colour
-mapping, screenplay parsing, reconciliation bookkeeping, packet export, and the
-progress bus.
-
----
-
-## Deploying
-
-```bash
-./deploy.ps1 -ProjectId YOUR_PROJECT_ID -ParallelApiKey pk_xxx
-```
-
-Enables the APIs, stores the Parallel key in Secret Manager, creates a
-least-privilege service account, deploys, then re-deploys with `PUBLIC_BASE_URL`
-set so Monitor webhooks can reach the service.
-
----
-
-## How long a run takes
-
-A `core` Task run is ~3–4 minutes of real web research. Items fan out
-`RESEARCH_CONCURRENCY` at a time:
-
-```
-ceil(items / RESEARCH_CONCURRENCY) × ~4 min  +  ~2 min for the scans
-```
-
-The seeded demo (11 items, concurrency 16) lands in about six minutes. Parallel
-Search results appear within seconds, so the UI is populated long before the
-dossiers land. Drop `PARALLEL_PROCESSOR` to `base` to trade depth for speed.
-
----
+Fixture mode is explicit and every human-facing fixture value is prefixed `MOCK:`. For live analysis, set `GOOGLE_API_KEY` and `PARALLEL_API_KEY`, then run `bun run dev` without `MOCK_RESEARCH=true`.
 
 ## Configuration
 
-| Variable | Default | |
-|---|---|---|
-| `GOOGLE_CLOUD_PROJECT` | — | GCP project id |
-| `GOOGLE_CLOUD_LOCATION` | `global` | Vertex AI location |
-| `GOOGLE_GENAI_USE_VERTEXAI` | `TRUE` | `FALSE` to use an AI Studio key |
-| `GEMINI_MODEL` | *(probe)* | Pin a model, skipping the startup probe |
-| `GCS_BUCKET` | — | Set to read cuts from Cloud Storage instead of inline |
-| `PARALLEL_API_KEY` | — | Parallel key |
-| `PARALLEL_SEARCH_MODE` | `basic` | `turbo`, `basic`, or `advanced` |
-| `PARALLEL_PROCESSOR` | `core` | `lite`/`base`/`core`/`pro`/`ultra` |
-| `RESEARCH_CONCURRENCY` | `16` | In-flight research runs |
-| `MOCK_RESEARCH` | `false` | Serve fixtures instead of calling Parallel |
-| `USE_FIRESTORE` | `false` | Persist projects and audit trail |
-| `PUBLIC_BASE_URL` | — | Public origin; required for Monitor webhooks |
-| `PARALLEL_WEBHOOK_SECRET` | — | Require `x-radar-secret` on webhooks |
+| Variable | Default | Purpose |
+|---|---:|---|
+| `GOOGLE_API_KEY` | — | Google AI Studio key for live Gemini analysis |
+| `GEMINI_MODEL` | `gemini-3.8-flash` | Gemini model used for structured multimodal output |
+| `PARALLEL_API_KEY` | — | Parallel Search, Task, and Monitor key |
+| `PARALLEL_PROCESSOR` | `core` | Structured Task processor |
+| `PARALLEL_MONITOR_PROCESSOR` | `lite` | Monitor processor |
+| `RESEARCH_CONCURRENCY` | `16` | Concurrent per-case research jobs |
+| `MOCK_RESEARCH` | `false` | Use deterministic fixture integrations instead of live providers |
+| `ASSET_STORAGE_DIR` | `.clearcut/assets` | Local opaque asset store |
+| `FFPROBE_PATH` | `ffprobe` | Media probe binary |
+| `MAX_UPLOAD_BYTES` | `209715200` | API upload ceiling |
+| `PUBLIC_BASE_URL` | — | Public origin used for Parallel webhook delivery |
+| `PARALLEL_WEBHOOK_SECRET` | — | Required webhook secret |
+| `CLEARCUT_API_ORIGIN` | `https://clearcut-api.lcl` | Development rewrite target used by Next.js |
 
----
+## Verification
 
-## Limits, honestly
+```bash
+bun run test
+bun run typecheck
+bun run lint
+bun run build
+```
 
-- **This is research support, not legal advice, and nothing it produces is a
-  legal clearance.** It exists to make a clearance professional dramatically
-  faster. Counsel owns every legal conclusion.
-- **The cut scanner is a candidate detector**, not a trademark registry or an
-  audio fingerprinter. It reports what it can see and hear, flags low
-  confidence, and leaves ambiguity ambiguous.
-- **Rights holders are candidates** derived from public sources, with citations
-  and retrieval dates. Confirm before reliance.
-- **Scanned PDFs need OCR first.** Clearance Radar reads the text layer and says
-  so rather than silently returning nothing.
-- **In-memory by default.** Set `USE_FIRESTORE=true` for anything you care about
-  keeping.
+The automated suites cover shared contracts, status ownership, recorded document scope, immutable revisions, packet idempotency, provider validation, API lifecycle and security, Cloudflare routing, and the main Next.js product surfaces. The running application is additionally browser-verified through intake, review, citations, monitored cases, packet export, Version Ripple, and mobile layout.
+
+## Deploy
+
+Two Cloud Run services, built from `apps/api/Dockerfile` and `apps/web/Dockerfile`:
+
+```bash
+gcloud auth login
+./infra/cloudrun/deploy.sh YOUR_PROJECT_ID us-central1
+```
+
+Before the first deploy, add the provider keys to Secret Manager — the script creates the secrets but cannot fill them, and live mode refuses to boot without them:
+
+```bash
+printf 'YOUR_KEY' | gcloud secrets versions add google-api-key --data-file=-
+printf 'YOUR_KEY' | gcloud secrets versions add parallel-api-key --data-file=-
+openssl rand -hex 32 | tr -d '\n' | gcloud secrets versions add parallel-webhook-secret --data-file=-
+```
+
+Three service settings are load-bearing rather than tuning choices. `--no-cpu-throttling` keeps CPU allocated after a response is sent, because the clearance pipeline is started with `queueMicrotask` once the HTTP response has already gone out. `--min-instances=1 --max-instances=1` pins one instance, because project records and the SSE event bus are in-memory. `--timeout=3600` covers long-lived SSE streams.
+
+The web service proxies `/api/*` through a streaming route handler rather than a Next.js rewrite: Next 16's rewrite proxy buffers `text/event-stream` bodies and currently fails against an absolute external origin in a standalone build.
+
+## Limits
+
+- ClearCut supports clearance research; it is not legal advice and does not determine whether a use is lawful.
+- Detection produces candidates, not a guarantee of exhaustive trademark, copyright, music, privacy, or publicity-rights identification.
+- Candidate rights holders and contact routes come from public research and must be confirmed by a qualified human.
+- Scope assessment compares recorded metadata; it does not parse legal meaning from an attached document.
+- Scanned screenplay PDFs need a usable text layer or OCR before upload.
+- The default local repository is intentionally non-durable; use the Cloudflare D1/R2 adapters for production persistence.
 
 ## License
 
-MIT — see [LICENSE](LICENSE).
+MIT — see [`LICENSE`](LICENSE).

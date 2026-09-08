@@ -4,9 +4,6 @@
   "main": ".open-next/worker.js",
   "compatibility_date": "2026-08-24",
   "compatibility_flags": ["nodejs_compat", "global_fetch_strictly_public"],
-  "vars": {
-    "CLEARCUT_API_ORIGIN": "https://clearcut-api-136080957017.us-central1.run.app"
-  },
   "assets": {
     "directory": ".open-next/assets",
     "binding": "ASSETS"

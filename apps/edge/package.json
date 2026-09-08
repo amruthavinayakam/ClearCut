@@ -1,0 +1,23 @@
+{
+  "name": "@clearcut/edge",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "lint": "tsc -p tsconfig.json --noEmit",
+    "test": "bun test",
+    "cf:typegen": "wrangler types --env-interface CloudflareEnv",
+    "cf:check": "wrangler deploy --dry-run --outdir=dist"
+  },
+  "dependencies": {
+    "@clearcut/contracts": "workspace:*",
+    "@cloudflare/containers": "latest",
+    "aws4fetch": "latest",
+    "zod": "^4.4.3"
+  },
+  "devDependencies": {
+    "@types/node": "latest",
+    "wrangler": "latest"
+  }
+}

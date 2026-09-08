@@ -1,0 +1,21 @@
+{
+  "name": "@clearcut/api",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "PORTLESS_TLD=lcl portless clearcut-api bun --hot src/server.ts",
+    "build": "bun build src/server.ts --target=bun --outdir=dist",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "lint": "tsc -p tsconfig.json --noEmit",
+    "test": "bun test"
+  },
+  "dependencies": {
+    "@clearcut/contracts": "workspace:*",
+    "@clearcut/domain": "workspace:*",
+    "@clearcut/integrations": "workspace:*",
+    "hono": "latest",
+    "pdfjs-dist": "^6.2.108",
+    "zod": "^4.4.3"
+  }
+}

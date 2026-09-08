@@ -1,0 +1,62 @@
+{
+  "$schema": "./node_modules/wrangler/config-schema.json",
+  "name": "clearcut-edge",
+  "main": "src/index.ts",
+  "compatibility_date": "2026-08-24",
+  "compatibility_flags": ["nodejs_compat"],
+  "vars": {
+    "R2_BUCKET_NAME": "clearcut-assets",
+    "UPLOAD_ORIGINS": "https://clearcut.app,https://clearcut.lcl",
+    "PUBLIC_BASE_URL": "https://clearcut.app",
+    "MOCK_RESEARCH": "false"
+  },
+  "secrets": {
+    "required": [
+      "BINDING_NONCE",
+      "GOOGLE_API_KEY",
+      "PARALLEL_API_KEY",
+      "PARALLEL_WEBHOOK_SECRET",
+      "R2_ACCOUNT_ID",
+      "R2_ACCESS_KEY_ID",
+      "R2_SECRET_ACCESS_KEY"
+    ]
+  },
+  "d1_databases": [
+    {
+      "binding": "DB",
+      "database_name": "clearcut",
+      "database_id": "00000000-0000-0000-0000-000000000000",
+      "migrations_dir": "../../infra/d1"
+    }
+  ],
+  "r2_buckets": [
+    {
+      "binding": "ASSETS",
+      "bucket_name": "clearcut-assets",
+      "preview_bucket_name": "clearcut-assets-preview"
+    }
+  ],
+  "containers": [
+    {
+      "class_name": "ClearCutApiContainer",
+      "image": "../api/Dockerfile",
+      "image_build_context": "../..",
+      "max_instances": 1,
+      "name": "clearcut-api"
+    }
+  ],
+  "durable_objects": {
+    "bindings": [
+      {
+        "name": "CLEARCUT_API",
+        "class_name": "ClearCutApiContainer"
+      }
+    ]
+  },
+  "migrations": [
+    {
+      "tag": "v1",
+      "new_sqlite_classes": ["ClearCutApiContainer"]
+    }
+  ]
+}

@@ -1,3 +1,17 @@
+# --- stage 1: build the UI -------------------------------------------------
+FROM node:20-slim AS ui
+
+WORKDIR /ui
+COPY frontend/package*.json ./
+RUN npm ci
+
+COPY frontend/ ./
+# Vite writes to ../backend/app/static, which resolves to /backend/app/static
+# inside this stage; copied out below.
+RUN npm run build
+
+
+# --- stage 2: runtime ------------------------------------------------------
 FROM python:3.12-slim
 
 ENV PYTHONUNBUFFERED=1 \
@@ -18,10 +32,7 @@ RUN pip install --no-cache-dir -r requirements.txt
 
 COPY backend/ ./backend/
 COPY tools/ ./tools/
-
-# The UI ships separately (Next.js on Cloudflare) — this container is the
-# API only. main.py's static-file mount is a no-op when backend/app/static
-# doesn't exist, so nothing else needs to change.
+COPY --from=ui /backend/app/static ./backend/app/static
 
 # Cloud Run injects PORT. Keep-alive is generous because the progress stream is
 # a long-lived SSE connection.

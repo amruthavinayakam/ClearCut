@@ -4,18 +4,21 @@ __pycache__/
 .env
 .env.local
 node_modules/
-backend/app/static/
 .next/
 .open-next/
 .wrangler/
-.vercel/
-*.tsbuildinfo
+coverage/
+dist/
+frontend/dist/
+backend/app/static/
 .DS_Store
 *.egg-info/
+*.tsbuildinfo
 .pytest_cache/
-uploads/
+/uploads/
 .last_project
 .claude/
+apps/api/.clearcut/
 
 # Generated demo assets are committed on purpose so judges can run the seeded
 # demo without regenerating them. Only the intermediate audio is ignored.

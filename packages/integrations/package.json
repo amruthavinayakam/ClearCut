@@ -1,0 +1,21 @@
+{
+  "name": "@clearcut/integrations",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "scripts": {
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "lint": "tsc -p tsconfig.json --noEmit",
+    "test": "bun test"
+  },
+  "dependencies": {
+    "@clearcut/contracts": "workspace:*",
+    "@google/adk": "^2.0.0",
+    "@google/genai": "^2.21.0",
+    "parallel-web": "^1.3.3",
+    "zod": "^4.4.3"
+  }
+}

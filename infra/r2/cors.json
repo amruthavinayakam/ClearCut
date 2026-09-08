@@ -1,0 +1,12 @@
+[
+  {
+    "AllowedOrigins": [
+      "https://clearcut.app",
+      "https://clearcut.lcl"
+    ],
+    "AllowedMethods": ["GET", "HEAD", "PUT"],
+    "AllowedHeaders": ["Content-Type", "ETag", "If-Match"],
+    "ExposeHeaders": ["ETag"],
+    "MaxAgeSeconds": 3600
+  }
+]
