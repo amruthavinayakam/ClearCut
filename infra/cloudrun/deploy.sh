@@ -85,6 +85,42 @@ for secret in google-api-key parallel-api-key parallel-webhook-secret; do
     --quiet >/dev/null
 done
 
+# Cloud Build runs as the compute service account and needs to push images and
+# write logs. Without these the build fails with an opaque permissions error.
+echo "--> Granting the build service account push and logging rights"
+for role in roles/artifactregistry.writer roles/logging.logWriter; do
+  gcloud projects add-iam-policy-binding "$PROJECT_ID" \
+    --member="serviceAccount:${RUNTIME_SA}" \
+    --role="$role" \
+    --condition=None \
+    --quiet >/dev/null
+done
+
+# Live mode refuses to boot without provider keys, so a secret with no version
+# would produce a container that crash-loops behind a healthy-looking deploy.
+# Fail here instead, with the command that fixes it.
+missing=()
+for secret in google-api-key parallel-api-key; do
+  if [ -z "$(gcloud secrets versions list "$secret" --limit 1 --format='value(name)' 2>/dev/null)" ]; then
+    missing+=("$secret")
+  fi
+done
+if [ ${#missing[@]} -gt 0 ]; then
+  echo
+  echo "The following secrets have no value yet: ${missing[*]}"
+  echo "Add them, then re-run this script:"
+  for secret in "${missing[@]}"; do
+    echo "  printf 'YOUR_KEY' | gcloud secrets versions add ${secret} --data-file=-"
+  done
+  exit 1
+fi
+
+# The webhook secret is ours to generate rather than fetch.
+if [ -z "$(gcloud secrets versions list parallel-webhook-secret --limit 1 --format='value(name)' 2>/dev/null)" ]; then
+  echo "--> Generating a Parallel webhook secret"
+  openssl rand -hex 32 | tr -d '\n' | gcloud secrets versions add parallel-webhook-secret --data-file=- --quiet >/dev/null
+fi
+
 # --- API ---------------------------------------------------------------------
 # --no-cpu-throttling is load-bearing, not a tuning knob: the clearance pipeline
 # is started with queueMicrotask *after* the HTTP response is sent. Under the
