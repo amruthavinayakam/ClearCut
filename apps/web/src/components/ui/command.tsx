@@ -49,10 +49,6 @@ function CommandDialog({
 }) {
   return (
     <Dialog {...props}>
-      <DialogHeader className="sr-only">
-        <DialogTitle>{title}</DialogTitle>
-        <DialogDescription>{description}</DialogDescription>
-      </DialogHeader>
       <DialogContent
         className={cn(
           "top-1/3 translate-y-0 overflow-hidden rounded-xl! p-0",
@@ -60,7 +56,16 @@ function CommandDialog({
         )}
         showCloseButton={showCloseButton}
       >
-        {children}
+        {/* The title and description belong inside the content: they supply the
+            dialog's accessible name, and outside it they label nothing. */}
+        <DialogHeader className="sr-only">
+          <DialogTitle>{title}</DialogTitle>
+          <DialogDescription>{description}</DialogDescription>
+        </DialogHeader>
+        {/* Every cmdk primitive below reads the Command store from context.
+            Without this wrapper CommandInput throws
+            "Cannot read properties of undefined (reading 'subscribe')". */}
+        <Command>{children}</Command>
       </DialogContent>
     </Dialog>
   )
