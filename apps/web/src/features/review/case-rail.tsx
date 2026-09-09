@@ -12,7 +12,11 @@ export function CaseRail({ items, selectedId, onSelect }: { items: ClearanceItem
         {items.map((item, index) => (
           <button
             aria-pressed={selectedId === item.id}
-            className={cn("grid min-w-[230px] grid-cols-[8px_1fr_auto] gap-2 border-r border-border px-3 py-3 text-left transition-colors xl:min-w-0 xl:border-b xl:border-r-0", selectedId === item.id ? "bg-muted" : "hover:bg-muted/60")}
+            // xl:w-full is load-bearing: a button is a form control, so its
+            // `width: auto` resolves to fit-content even as a grid container.
+            // Without it each row sizes to its own label and the dividers come
+            // out ragged once the rail stacks vertically.
+            className={cn("grid min-w-[230px] grid-cols-[8px_1fr_auto] gap-2 border-r border-border px-3 py-3 text-left transition-colors xl:w-full xl:min-w-0 xl:border-b xl:border-r-0", selectedId === item.id ? "bg-muted" : "hover:bg-muted/60")}
             key={item.id}
             onClick={() => onSelect(item.id)}
             type="button"
