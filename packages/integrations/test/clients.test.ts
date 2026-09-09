@@ -141,3 +141,36 @@ describe("live integrations", () => {
     expect(project).toEqual(before);
   });
 });
+
+describe("model throttling", () => {
+  test("a rate-limited stage is retried rather than reported as a finding", async () => {
+    let attempts = 0;
+    const gemini = new LiveGeminiClient({
+      apiKey: "test-key",
+      request: async () => {
+        attempts += 1;
+        // Two 429s, exactly what a production's worth of cases hitting the
+        // quota at once produces, then the real answer.
+        if (attempts <= 2) throw new Error("Gemini rights_dossier_synthesist failed (429): Resource exhausted.");
+        return { candidates: [{ content: { parts: [{ text: JSON.stringify({ candidates: [] }) }] } }] };
+      },
+    });
+
+    const result = await gemini.scanScreenplay({ productionTitle: "Retry", sourceVersion: "script-v1", scenes: [] });
+
+    expect(attempts).toBe(3);
+    expect(result.candidates).toEqual([]);
+  });
+
+  test("a failure that is not throttling is surfaced immediately", async () => {
+    let attempts = 0;
+    const gemini = new LiveGeminiClient({
+      apiKey: "test-key",
+      request: async () => { attempts += 1; throw new Error("Gemini screenplay_scanner failed (400): malformed request"); },
+    });
+
+    await expect(gemini.scanScreenplay({ productionTitle: "No retry", sourceVersion: "script-v1", scenes: [] }))
+      .rejects.toThrow(/400/);
+    expect(attempts).toBe(1);
+  });
+});

@@ -41,6 +41,37 @@ cleared, approved, fair use, or legally safe. Unknown facts must remain unknown.
 const ADK_APP_NAME = "clearcut";
 const ADK_USER_ID = "clearcut-agent";
 
+/**
+ * How a burst of cases survives the model's quota.
+ *
+ * A production researches all of its cases at once, so every synthesis call
+ * arrives at Vertex in the same instant and the tail of them come back 429
+ * RESOURCE_EXHAUSTED. Those cases were then recorded as though no rights holder
+ * existed, which is a different and much worse statement than "we were
+ * throttled" — one of them had ten sources already retrieved. Retrying spreads
+ * the same work over the quota instead of discarding it.
+ */
+const RATE_LIMIT_ATTEMPTS = 5;
+
+function isRateLimited(error: unknown): boolean {
+  const message = error instanceof Error ? error.message : String(error);
+  return /\b429\b|RESOURCE[_ ]EXHAUSTED|resource exhausted|rate limit|quota/i.test(message);
+}
+
+async function withRateLimitRetry<T>(work: () => Promise<T>): Promise<T> {
+  for (let attempt = 0; ; attempt += 1) {
+    try {
+      return await work();
+    } catch (error) {
+      if (attempt >= RATE_LIMIT_ATTEMPTS || !isRateLimited(error)) throw error;
+      // Jittered, or every throttled case retries on the same schedule and
+      // simply reproduces the burst that caused the throttling.
+      const backoff = 2 ** attempt * 1_000;
+      await new Promise((resolve) => setTimeout(resolve, backoff + Math.random() * backoff));
+    }
+  }
+}
+
 /** Above this, a cut is staged through the Gemini Files API instead of the request body. */
 const INLINE_MEDIA_LIMIT_BYTES = 18 * 1024 * 1024;
 const FILE_PROCESSING_TIMEOUT_MS = 10 * 60_000;
@@ -346,7 +377,16 @@ export class LiveGeminiClient implements GeminiClient {
    * Sends one stage to Gemini. An injected `request` (tests, replay) keeps the
    * raw generateContent envelope; otherwise the stage runs as an ADK agent.
    */
-  async #structured<T>(
+  #structured<T>(
+    spec: AgentSpec,
+    prompt: string,
+    output: z.ZodType<T>,
+    media?: { legacy: unknown; part: PartUnion },
+  ): Promise<T> {
+    return withRateLimitRetry(() => this.#structuredOnce(spec, prompt, output, media));
+  }
+
+  async #structuredOnce<T>(
     spec: AgentSpec,
     prompt: string,
     output: z.ZodType<T>,
