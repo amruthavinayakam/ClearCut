@@ -323,6 +323,7 @@ export const MonitorRecordSchema = z.object({
   }).passthrough()),
 }).strict();
 
+export type Category = z.infer<typeof CategorySchema>;
 export type HeatColor = z.infer<typeof HeatColorSchema>;
 export type Actor = z.infer<typeof ActorSchema>;
 export type WorkflowStatus = z.infer<typeof WorkflowStatusSchema>;

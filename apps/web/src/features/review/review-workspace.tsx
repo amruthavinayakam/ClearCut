@@ -25,8 +25,11 @@ export function ReviewWorkspace({ project, initialCaseId }: { project: Project; 
   };
 
   return (
-    <main className="min-h-dvh">
-      <header className="flex min-h-16 flex-wrap items-center justify-between gap-3 border-b border-border px-3 py-2">
+    // The review workspace is a fixed viewport: the page itself never scrolls,
+    // each column manages its own overflow. Below xl the columns stack and the
+    // whole thing scrolls normally, since a phone has no room for three panes.
+    <main className="flex flex-col xl:h-dvh xl:overflow-hidden">
+      <header className="flex min-h-16 shrink-0 flex-wrap items-center justify-between gap-3 border-b border-border px-3 py-2">
         <div className="flex min-w-0 items-center gap-3">
           <Link aria-label="Back to productions" className={buttonVariants({ size: "icon-sm", variant: "ghost" })} href="/"><ChevronLeft /></Link>
           <div className="min-w-0"><div className="flex items-center gap-2"><h1 className="truncate text-sm font-medium">{project.title}</h1><span className="font-mono text-[9px] text-muted-foreground">{project.id}</span></div><p className="mt-0.5 text-[11px] text-muted-foreground">{project.items.length} cases · {project.summary.total_citations} citations · {project.summary.resolved_items} resolved</p></div>
@@ -38,10 +41,16 @@ export function ReviewWorkspace({ project, initialCaseId }: { project: Project; 
           <Button aria-label="More project actions" size="icon-sm" variant="ghost"><MoreHorizontal /></Button>
         </div>
       </header>
-      <div className="grid min-h-[calc(100dvh-4rem)] grid-cols-1 xl:grid-cols-[260px_minmax(420px,1fr)_360px]">
+      {/* minmax(0,1fr) on the row is what makes the columns scrollable. An auto
+          row is sized by its tallest item's content, so the inspector's length
+          would set the row height, stretch every column to match, and push the
+          player's controls past the bottom of the viewport. */}
+      <div className="grid min-h-0 flex-1 grid-cols-1 xl:grid-cols-[260px_minmax(420px,1fr)_380px] xl:grid-rows-[minmax(0,1fr)]">
         <CaseRail items={project.items} onSelect={select} selectedId={selectedId} />
         <PictureWorkspace onSelect={select} project={project} selected={selected} />
-        {selected ? <EvidenceInspector item={selected} key={selected.id} projectId={project.id} /> : <aside className="grid min-h-64 place-items-center border-l border-border p-6 text-xs text-muted-foreground">Select a clearance case.</aside>}
+        {selected
+          ? <EvidenceInspector item={selected} key={selected.id} projectId={project.id} />
+          : <aside className="grid min-h-64 place-items-center border-l border-border p-6 text-xs text-muted-foreground">Select a clearance case.</aside>}
       </div>
     </main>
   );

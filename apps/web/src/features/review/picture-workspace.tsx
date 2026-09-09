@@ -1,38 +1,57 @@
 import type { ClearanceItem, Project } from "@clearcut/contracts";
 import { Film } from "lucide-react";
-import { useEffect, useRef } from "react";
+import { useMemo } from "react";
 
-import { Timeline } from "./timeline";
+import { VideoPlayer, type PictureMarker } from "./video-player";
 
 export function PictureWorkspace({ project, selected, onSelect }: { project: Project; selected: ClearanceItem | null; onSelect: (id: string) => void }) {
   const detection = selected?.cut_detections[0];
-  const videoRef = useRef<HTMLVideoElement>(null);
-  const seek = (seconds: number) => {
-    if (!videoRef.current) return;
-    try {
-      videoRef.current.currentTime = seconds;
-    } catch {
-      // Metadata loading will retry the seek through onLoadedMetadata.
-    }
-  };
 
-  useEffect(() => {
-    if (detection) seek(detection.representative_time);
-  }, [detection]);
-
-  const selectAtTime = (id: string, representativeTime: number) => {
-    seek(representativeTime);
-    onSelect(id);
-  };
+  // One marker per case, on the first place it appears in the picture.
+  const markers = useMemo<PictureMarker[]>(
+    () => project.items.flatMap((item) =>
+      item.cut_detections.slice(0, 1).map((cut) => ({ item, time: cut.representative_time }))),
+    [project.items],
+  );
 
   return (
-    <section className="flex min-h-[420px] min-w-0 flex-col bg-media" data-selected-case={selected?.id ?? ""} data-testid="media-canvas">
-      <div className="flex h-10 items-center justify-between border-b border-white/10 px-3 text-white/60"><span className="font-mono text-[9px] tracking-[0.08em]">PICTURE / {project.cut?.label ?? "NO CUT"}</span>{detection && <span className="font-mono text-[9px]">{detection.timecode.start.toFixed(1)}–{detection.timecode.end.toFixed(1)}s</span>}</div>
-      <div className="relative grid flex-1 place-items-center overflow-hidden bg-[#111214]">
-        {project.cut ? <video className="max-h-[58dvh] w-full object-contain" controls key={project.cut.id} onLoadedMetadata={() => detection && seek(detection.representative_time)} preload="metadata" ref={videoRef} src={`/api/projects/${project.id}/cut`} /> : <div className="text-center text-white/50"><Film className="mx-auto size-5" /><p className="mt-2 text-xs">No rough cut uploaded</p></div>}
-        {selected && <div className="pointer-events-none absolute left-3 top-3 border border-white/15 bg-black/70 px-2 py-1 font-mono text-[9px] text-white/70">{selected.name.toUpperCase()} / {selected.color.toUpperCase()}</div>}
+    <section
+      // min-h-0 lets this column be bounded by the page rather than by the
+      // video's natural height, which is what made it overrun.
+      className="flex min-h-0 min-w-0 flex-col overflow-hidden bg-media"
+      data-selected-case={selected?.id ?? ""}
+      data-testid="media-canvas"
+    >
+      <div className="flex h-10 shrink-0 items-center justify-between border-b border-white/10 px-3 text-white/60">
+        <span className="font-mono text-[9px] tracking-[0.08em]">PICTURE / {project.cut?.label ?? "NO CUT"}</span>
+        {detection && <span className="font-mono text-[9px]">{detection.timecode.start.toFixed(1)}–{detection.timecode.end.toFixed(1)}s</span>}
       </div>
-      <Timeline duration={project.cut?.duration_s ?? 0} items={project.items} onSelect={selectAtTime} selectedId={selected?.id ?? null} />
+
+      {project.cut ? (
+        <div className="relative flex min-h-0 flex-1 flex-col">
+          <VideoPlayer
+            duration={project.cut.duration_s ?? 0}
+            key={project.cut.id}
+            markers={markers}
+            onSelectMarker={(id) => onSelect(id)}
+            seekTo={detection?.representative_time ?? null}
+            selectedId={selected?.id ?? null}
+            src={`/api/projects/${project.id}/cut`}
+          />
+          {selected && (
+            <div className="pointer-events-none absolute left-3 top-3 border border-white/15 bg-black/70 px-2 py-1 font-mono text-[9px] text-white/70">
+              {selected.name.toUpperCase()} / {selected.color.toUpperCase()}
+            </div>
+          )}
+        </div>
+      ) : (
+        <div className="grid min-h-0 flex-1 place-items-center text-center text-white/50">
+          <div>
+            <Film className="mx-auto size-5" />
+            <p className="mt-2 text-xs">No rough cut uploaded</p>
+          </div>
+        </div>
+      )}
     </section>
   );
 }

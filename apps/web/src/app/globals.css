@@ -180,6 +180,14 @@ select {
 .risk-dot--gray,
 .risk-fill--gray { background: var(--muted-foreground); }
 
+/* Category tiles: the icon carries the risk colour, on a wash of the same hue
+   so the tile reads as tinted rather than as a saturated chip. */
+.risk-tint--red { color: var(--risk-red); background: color-mix(in oklch, var(--risk-red) 12%, transparent); }
+.risk-tint--amber { color: var(--risk-amber); background: color-mix(in oklch, var(--risk-amber) 14%, transparent); }
+.risk-tint--blue { color: var(--primary); background: color-mix(in oklch, var(--primary) 12%, transparent); }
+.risk-tint--green { color: var(--risk-green); background: color-mix(in oklch, var(--risk-green) 12%, transparent); }
+.risk-tint--gray { color: var(--muted-foreground); background: color-mix(in oklch, var(--muted-foreground) 12%, transparent); }
+
 .risk-badge--red { color: var(--risk-red); border-color: color-mix(in oklch, var(--risk-red) 35%, var(--border)); }
 .risk-badge--amber { color: var(--risk-amber); border-color: color-mix(in oklch, var(--risk-amber) 35%, var(--border)); }
 .risk-badge--blue { color: var(--primary); border-color: color-mix(in oklch, var(--primary) 35%, var(--border)); }
