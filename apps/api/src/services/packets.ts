@@ -23,6 +23,45 @@ const PRIORITY: Record<string, number> = {
   replacement_requested: 2,
 };
 
+/**
+ * Flattens provider text into a single safe line.
+ *
+ * Source excerpts and research summaries are markdown written by someone else.
+ * Pasted verbatim they take over the document: a newline ends the blockquote
+ * that was meant to contain them, and the excerpt's own `#` headings then
+ * outrank the packet's, while a stray `|` breaks the surrounding table.
+ */
+function inlineText(value: string, limit = 280): string {
+  const flat = value.replace(/\s+/g, " ").trim();
+  const cut = flat.lastIndexOf(" ", limit);
+  const clipped = flat.length <= limit
+    ? flat
+    : `${flat.slice(0, cut > limit / 2 ? cut : limit).trimEnd()}…`;
+  // Collapsing the whitespace above is what actually contains the text. Only a
+  // leading marker can still open a block, and a pipe can still split a cell —
+  // escaping anything further would just litter the prose with backslashes.
+  return clipped.replaceAll("|", "\\|").replace(/^([#>\-+*]|\d+\.)/, "\\$1");
+}
+
+/** Multi-line provider prose: keep the paragraphs, neutralise the line starts. */
+function blockText(value: string): string {
+  return value
+    .split(/\n{2,}/)
+    .map((paragraph) => inlineText(paragraph, 4_000))
+    .filter(Boolean)
+    .join("\n\n");
+}
+
+/** Table cells additionally cannot contain a bare pipe or a line break. */
+function cell(value: string): string {
+  return value.replace(/\s+/g, " ").replaceAll("|", "\\|").trim() || "—";
+}
+
+/** Link text cannot contain unbalanced brackets. */
+function linkText(value: string): string {
+  return value.replace(/\s+/g, " ").replace(/([[\]])/g, "\\$1").trim();
+}
+
 function timecode(seconds: number): string {
   const minutes = Math.floor(seconds / 60);
   const remaining = seconds - minutes * 60;
@@ -31,43 +70,43 @@ function timecode(seconds: number): string {
 
 function itemMarkdown(project: Project, item: ClearanceItem): string[] {
   const lines = [
-    `## ${COLOR_LABEL[item.color] ?? item.color.toLocaleUpperCase()} — ${item.name}`,
+    `## ${COLOR_LABEL[item.color] ?? item.color.toLocaleUpperCase()} — ${inlineText(item.name, 200)}`,
     "",
     `**Category:** ${item.category} · **Status:** \`${item.workflow_status}\` · **Detection confidence:** ${item.detection_confidence} · **Priority:** ${item.research_priority}`,
     "",
     item.provenance === "cut_only" ? "**UNSCRIPTED** — entered through the filmed material" : item.provenance === "both" ? "In script and cut" : "In script only",
     "",
   ];
-  if (item.description) lines.push(item.description, "");
+  if (item.description) lines.push(blockText(item.description), "");
   if (item.cut_detections.length) {
     lines.push("### On screen", "");
     for (const detection of item.cut_detections) {
-      lines.push(`- \`${timecode(detection.timecode.start)} – ${timecode(detection.timecode.end)}\` (${detection.modality}) — ${detection.observation}`);
+      lines.push(`- \`${timecode(detection.timecode.start)} – ${timecode(detection.timecode.end)}\` (${detection.modality}) — ${inlineText(detection.observation, 400)}`);
     }
     lines.push("");
   }
   if (item.candidate_rights_holders.length) {
     lines.push("### Candidate rights holders", "", "| Name | Role | Rights | Confidence |", "|---|---|---|---|");
     for (const holder of item.candidate_rights_holders) {
-      lines.push(`| ${holder.name} | ${holder.role} | ${holder.rights_implicated.join(", ") || "—"} | ${holder.confidence} |`);
+      lines.push(`| ${cell(holder.name)} | ${cell(holder.role)} | ${cell(holder.rights_implicated.join(", "))} | ${cell(holder.confidence)} |`);
     }
     lines.push("", "*Candidates derived from public sources — confirm before reliance.*", "");
   }
   if (item.licensing_routes.length) {
     lines.push("### Licensing routes", "");
     for (const route of item.licensing_routes) {
-      const organization = route.url ? `[${route.organization}](${route.url})` : route.organization;
-      lines.push(`- **${organization}** — ${route.route}${route.contact ? ` — ${route.contact}` : ""}`);
+      const organization = route.url ? `[${linkText(route.organization)}](${route.url})` : inlineText(route.organization, 200);
+      lines.push(`- **${organization}** — ${inlineText(route.route, 400)}${route.contact ? ` — ${inlineText(route.contact, 200)}` : ""}`);
     }
     lines.push("");
   }
-  if (item.research_summary) lines.push("### Research summary", "", item.research_summary, "");
-  if (item.evidence_gaps.length) lines.push("### Evidence gaps", "", ...item.evidence_gaps.map((gap) => `- ${gap}`), "");
+  if (item.research_summary) lines.push("### Research summary", "", blockText(item.research_summary), "");
+  if (item.evidence_gaps.length) lines.push("### Evidence gaps", "", ...item.evidence_gaps.map((gap) => `- ${inlineText(gap, 600)}`), "");
   if (item.documents.length) {
     lines.push("### Attached documents", "");
     for (const document of item.documents) {
       const scope = documentScope(project, document);
-      lines.push(`- **${document.kind}** — ${document.title}`);
+      lines.push(`- **${document.kind}** — ${inlineText(document.title, 200)}`);
       lines.push(`  - Recorded scope comparison: **${scope.outcome}**`);
       lines.push(...scope.gaps.map((gap) => `  - ${gap}`));
     }
@@ -81,8 +120,8 @@ function itemMarkdown(project: Project, item: ClearanceItem): string[] {
     for (const source of item.sources) {
       if (seen.has(source.url)) continue;
       seen.add(source.url);
-      lines.push(`- [${source.title ?? source.url}](${source.url}) — *via ${source.via.replaceAll("_", " ")}, retrieved ${source.retrieved_at.slice(0, 10)}*`);
-      if (source.excerpt) lines.push(`  > ${source.excerpt.trim().slice(0, 280)}`);
+      lines.push(`- [${linkText(source.title ?? source.url)}](${source.url}) — *via ${source.via.replaceAll("_", " ")}, retrieved ${source.retrieved_at.slice(0, 10)}*`);
+      if (source.excerpt) lines.push(`  > ${inlineText(source.excerpt)}`);
     }
   }
   lines.push("", "---", "");
@@ -105,7 +144,7 @@ export function packetMarkdown(project: Project): string {
   lines.push(
     "> **Research for human legal review.** ClearCut does not issue legal clearance. Candidate ownership and contact routes come from public research and must be confirmed before reliance.",
     "",
-    "| | |",
+    "| Field | Value |",
     "|---|---|",
     `| Script version | \`${project.script?.label ?? "—"}\` |`,
     `| Cut version | \`${project.cut?.label ?? "—"}\` |`,

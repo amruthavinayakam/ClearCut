@@ -24,6 +24,32 @@ describe("clearance packet", () => {
     expect((await repository.require("proj_fixture")).audit_events).toHaveLength(0);
   });
 
+  test("provider prose cannot take over the packet structure", async () => {
+    const { app, repository } = await createTestApi();
+    const project = ProjectSchema.parse(fixture);
+    // Shapes taken from real Parallel output: excerpts are markdown documents in
+    // their own right, complete with headings, tables and images.
+    project.items[0].sources[0].excerpt =
+      "Intro paragraph.\n\n# Artemis Program Identity\n\n## Summary\n\n|[](https://example.test/a.jpg)\n\nTrailing text.";
+    project.items[0].sources[0].title = "A [bracketed] title";
+    project.items[0].candidate_rights_holders[0].name = "Acme | Rights, Inc.";
+    project.items[0].research_summary = "Line one.\n# Not a heading\n\nSecond paragraph.";
+    await repository.save(project);
+
+    const markdown = await (await app.request("/api/projects/proj_fixture/packet.md")).text();
+    const body = markdown.split("\n");
+
+    // Every heading in the document must be one the packet itself emitted.
+    const headings = body.filter((line) => /^#{1,6} /.test(line));
+    expect(headings.some((line) => line.includes("Artemis Program Identity"))).toBe(false);
+    expect(headings.some((line) => line === "## Summary")).toBe(false);
+    // Table rows stay two- or four-column; a pipe from a holder name is escaped.
+    expect(markdown).toContain("Acme \\| Rights, Inc.");
+    expect(body.some((line) => line.startsWith("|[]("))).toBe(false);
+    // Link text with brackets stays balanced.
+    expect(markdown).toContain("[A \\[bracketed\\] title]");
+  });
+
   test("confirmed export is downloadable and idempotent for one request id", async () => {
     const { app, repository } = await createTestApi();
     await repository.save(ProjectSchema.parse(fixture));

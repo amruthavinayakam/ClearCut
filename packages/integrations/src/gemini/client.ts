@@ -4,6 +4,7 @@ import {
   InMemorySessionService,
   LlmAgent,
   Runner,
+  StreamingMode,
   type LlmAgentSchema,
 } from "@google/adk";
 import {
@@ -41,6 +42,14 @@ const ADK_USER_ID = "clearcut-agent";
 /** Above this, a cut is staged through the Gemini Files API instead of the request body. */
 const INLINE_MEDIA_LIMIT_BYTES = 18 * 1024 * 1024;
 const FILE_PROCESSING_TIMEOUT_MS = 10 * 60_000;
+
+/** Shared by the structured and streaming copilot paths. */
+const COPILOT_AGENT = {
+  operation: "copilot",
+  agentName: "clearance_copilot",
+  description: "Explains the stored clearance record to a coordinator.",
+  instruction: "Answer the coordinator's question using only the evidence supplied. You cannot alter status or approve anything. If evidence is absent, say it is unknown.",
+} as const;
 
 function projectContext(project: Project): string {
   return JSON.stringify({
@@ -134,6 +143,16 @@ export class FixtureGeminiClient implements GeminiClient {
       });
     }
     return ReconciliationResultSchema.parse({ matches });
+  }
+
+  async *streamCopilot(input: { project: Project; question: string }) {
+    const { answer } = await this.answerCopilot(input);
+    // Chunk on word boundaries so fixture mode exercises the same incremental
+    // rendering path the live stream drives.
+    for (const chunk of answer.match(/\S+\s*/g) ?? [answer]) {
+      yield chunk;
+      await new Promise((resolve) => setTimeout(resolve, 12));
+    }
   }
 
   async answerCopilot(input: { project: Project; question: string }) {
@@ -365,14 +384,53 @@ export class LiveGeminiClient implements GeminiClient {
 
   answerCopilot(input: { project: Project; question: string }) {
     return this.#structured(
-      {
-        operation: "copilot",
-        agentName: "clearance_copilot",
-        description: "Explains the stored clearance record to a coordinator.",
-        instruction: "Answer the coordinator's question using only the evidence supplied. You cannot alter status or approve anything. If evidence is absent, say it is unknown.",
-      },
+      COPILOT_AGENT,
       `QUESTION: ${input.question}\nEVIDENCE: ${projectContext(input.project)}`,
       CopilotAnswerSchema,
     );
+  }
+
+  /**
+   * Streams the copilot answer token by token.
+   *
+   * No `outputSchema` here — the agent writes markdown prose directly, so each
+   * delta is renderable on arrival. The structured `answerCopilot` above stays
+   * as-is for callers that want the validated envelope.
+   */
+  async *streamCopilot(input: { project: Project; question: string }): AsyncIterable<string> {
+    const agent = new LlmAgent({
+      name: COPILOT_AGENT.agentName,
+      model: this.#model_(),
+      description: COPILOT_AGENT.description,
+      instruction: `${GEMINI_SYSTEM}\n\n${COPILOT_AGENT.instruction}\n\nWrite short markdown: a lead sentence, then bullets when you list evidence, gaps or next actions. Do not wrap the reply in a code fence.`,
+      generateContentConfig: { temperature: 0.2 },
+    });
+    const sessionService = new InMemorySessionService();
+    const runner = new Runner({ agent, appName: ADK_APP_NAME, sessionService });
+    const sessionId = crypto.randomUUID();
+    await sessionService.createSession({ appName: ADK_APP_NAME, userId: ADK_USER_ID, sessionId });
+
+    // SSE mode makes runAsync yield partial events as tokens arrive. Each event
+    // carries the text so far for that turn, so emit only what is new.
+    let emitted = "";
+    for await (const event of runner.runAsync({
+      userId: ADK_USER_ID,
+      sessionId,
+      newMessage: createUserContent([`QUESTION: ${input.question}\nEVIDENCE: ${projectContext(input.project)}`]),
+      runConfig: { streamingMode: StreamingMode.SSE },
+    })) {
+      if (event.errorCode) {
+        throw new Error(`Gemini ${COPILOT_AGENT.agentName} failed (${event.errorCode}): ${event.errorMessage ?? "no message"}`);
+      }
+      if (event.author !== COPILOT_AGENT.agentName) continue;
+      const text = (event.content?.parts ?? []).map((part) => part.text ?? "").join("");
+      if (!text) continue;
+      // Partial events are cumulative; a final event repeats the whole turn.
+      const delta = text.startsWith(emitted) ? text.slice(emitted.length) : text;
+      if (!delta) continue;
+      emitted = text.startsWith(emitted) ? text : emitted + delta;
+      yield delta;
+    }
+    if (!emitted) throw new Error("Gemini clearance_copilot returned no content.");
   }
 }

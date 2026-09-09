@@ -62,13 +62,64 @@ export type DocumentClient = {
   uploadDocument(projectId: string, itemId: string, body: FormData): Promise<unknown>;
 };
 
+export type CopilotStreamEvent =
+  | { type: "delta"; text: string }
+  | { type: "done"; citations: string[] }
+  | { type: "error"; message: string };
+
 export type CopilotClient = {
   ask(projectId: string, question: string): Promise<{ answer: string; citations: Array<{ url?: string; title?: string }>; session_id: string }>;
+  askStream(projectId: string, question: string, signal?: AbortSignal): AsyncIterable<CopilotStreamEvent>;
 };
+
+/**
+ * Reads the copilot SSE stream. EventSource cannot POST, so the frames are
+ * parsed here off a fetch body reader.
+ */
+async function* askCopilotStream(
+  projectId: string,
+  question: string,
+  signal?: AbortSignal,
+): AsyncIterable<CopilotStreamEvent> {
+  const response = await fetch(`/api/projects/${projectId}/chat/stream`, {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({ question }),
+    signal,
+  });
+  if (!response.ok || !response.body) {
+    throw new Error(`The copilot could not answer (${response.status}).`);
+  }
+
+  const reader = response.body.pipeThrough(new TextDecoderStream()).getReader();
+  let buffer = "";
+  while (true) {
+    const { done, value } = await reader.read();
+    if (done) break;
+    buffer += value;
+    // SSE frames are separated by a blank line.
+    let split = buffer.indexOf("\n\n");
+    for (; split !== -1; split = buffer.indexOf("\n\n")) {
+      const frame = buffer.slice(0, split);
+      buffer = buffer.slice(split + 2);
+      let event = "message";
+      const data: string[] = [];
+      for (const line of frame.split("\n")) {
+        if (line.startsWith("event:")) event = line.slice(6).trim();
+        else if (line.startsWith("data:")) data.push(line.slice(5).trim());
+      }
+      if (!data.length) continue;
+      const payload = JSON.parse(data.join("\n"));
+      if (event === "delta") yield { type: "delta", text: payload.text as string };
+      else if (event === "done") yield { type: "done", citations: (payload.citations ?? []) as string[] };
+      else if (event === "error") yield { type: "error", message: payload.message as string };
+    }
+  }
+}
 
 export const dispositionClient: DispositionClient = { setStatus: setItemStatus };
 export const monitorClient: MonitorClient = { createMonitor: createItemMonitor };
 export const documentClient: DocumentClient = { uploadDocument: uploadItemDocument };
-export const copilotClient: CopilotClient = { ask: askCopilot };
+export const copilotClient: CopilotClient = { ask: askCopilot, askStream: askCopilotStream };
 
 export type ItemWithDocuments = Pick<ClearanceItem, "documents">;
