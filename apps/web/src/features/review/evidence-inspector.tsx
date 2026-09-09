@@ -2,6 +2,7 @@ import type { ClearanceItem } from "@clearcut/contracts";
 import { AlertTriangle, ArrowUpRight, CheckCircle2, ChevronRight, FileCheck2 } from "lucide-react";
 
 import { Badge } from "@/components/ui/badge";
+import { Collapsible, CollapsiblePanel, CollapsibleTrigger } from "@/components/ui/collapsible";
 import { ScrollFade } from "@/components/ui/scroll-fade";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { DocumentSheet } from "@/features/documents/document-sheet";
@@ -72,15 +73,15 @@ export function EvidenceInspector({ projectId, item }: { projectId: string; item
               </div>
             )}
 
-            {/* Native disclosure: the write-up is reference material, so it costs
-                nothing when closed and needs no state to open. */}
-            <details className="group mt-3 rounded-xl shadow-[inset_0_0_0_1px_oklch(0_0_0/0.07)]">
-              <summary className="flex min-h-11 cursor-pointer list-none items-center gap-1.5 p-3.5 text-[11px] font-medium marker:content-none">
-                <ChevronRight className="size-3.5 text-muted-foreground transition-transform group-open:rotate-90" />
+            <Collapsible className="mt-3 rounded-xl shadow-[inset_0_0_0_1px_oklch(0_0_0/0.07)]">
+              <CollapsibleTrigger className="min-h-11 p-3.5 text-[11px] font-medium">
+                <ChevronRight className="size-3.5 text-muted-foreground transition-transform duration-200 ease-out-quint group-data-[panel-open]/collapsible:rotate-90" />
                 What the research found
-              </summary>
-              <p className="px-3.5 pb-3.5 text-xs leading-5 text-pretty text-muted-foreground">{summary}</p>
-            </details>
+              </CollapsibleTrigger>
+              <CollapsiblePanel>
+                <p className="px-3.5 pb-3.5 text-xs leading-5 text-pretty text-muted-foreground">{summary}</p>
+              </CollapsiblePanel>
+            </Collapsible>
 
             <MonitorControl item={item} projectId={projectId} />
           </TabsContent>

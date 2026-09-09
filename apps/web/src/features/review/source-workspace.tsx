@@ -4,7 +4,7 @@ import type { ClearanceItem, Project } from "@clearcut/contracts";
 import { Clapperboard, FileText, Upload } from "lucide-react";
 import { useState } from "react";
 
-import { cn } from "@/lib/utils";
+import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 
 import { PictureWorkspace } from "./picture-workspace";
 import { ScriptWorkspace } from "./script-workspace";
@@ -49,33 +49,24 @@ export function SourceWorkspace({
 
   return (
     <section className="flex min-h-0 min-w-0 flex-col overflow-hidden border-r border-border">
+      {/* A real tab list rather than buttons wearing tab roles: keyboard
+          navigation, roving focus and the selected state all come from the
+          component instead of being approximated here. */}
       {hasScript && hasCut && (
-        <div className="flex h-10 shrink-0 items-center gap-1 border-b border-border px-2" role="tablist">
-          {([
-            { id: "script", label: "Screenplay", icon: FileText, version: project.script?.label },
-            { id: "cut", label: "Rough cut", icon: Clapperboard, version: project.cut?.label },
-          ] as const).map((tab) => {
-            const Icon = tab.icon;
-            const current = active === tab.id;
-            return (
-              <button
-                aria-selected={current}
-                className={cn(
-                  "flex h-7 items-center gap-1.5 rounded-md px-2.5 text-[12px] transition-colors",
-                  current ? "bg-muted font-medium text-foreground" : "text-muted-foreground hover:bg-muted/60 hover:text-foreground",
-                )}
-                key={tab.id}
-                onClick={() => setView(tab.id)}
-                role="tab"
-                type="button"
-              >
-                <Icon className="size-3.5" />
-                {tab.label}
-                <span className="font-mono text-[9px] text-muted-foreground">{tab.version}</span>
-              </button>
-            );
-          })}
-        </div>
+        <Tabs onValueChange={(value) => setView(value as "script" | "cut")} value={active}>
+          <TabsList className="w-full shrink-0 px-2" variant="line">
+            <TabsTrigger value="script">
+              <FileText />
+              Screenplay
+              <span className="font-mono text-[9px] text-muted-foreground">{project.script?.label}</span>
+            </TabsTrigger>
+            <TabsTrigger value="cut">
+              <Clapperboard />
+              Rough cut
+              <span className="font-mono text-[9px] text-muted-foreground">{project.cut?.label}</span>
+            </TabsTrigger>
+          </TabsList>
+        </Tabs>
       )}
 
       {active === "cut"

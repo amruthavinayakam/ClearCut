@@ -58,7 +58,7 @@ function isRateLimited(error: unknown): boolean {
   return /\b429\b|RESOURCE[_ ]EXHAUSTED|resource exhausted|rate limit|quota/i.test(message);
 }
 
-async function withRateLimitRetry<T>(work: () => Promise<T>): Promise<T> {
+async function withRateLimitRetry<T>(work: () => Promise<T>, baseDelayMs = 1_000): Promise<T> {
   for (let attempt = 0; ; attempt += 1) {
     try {
       return await work();
@@ -66,7 +66,7 @@ async function withRateLimitRetry<T>(work: () => Promise<T>): Promise<T> {
       if (attempt >= RATE_LIMIT_ATTEMPTS || !isRateLimited(error)) throw error;
       // Jittered, or every throttled case retries on the same schedule and
       // simply reproduces the burst that caused the throttling.
-      const backoff = 2 ** attempt * 1_000;
+      const backoff = 2 ** attempt * baseDelayMs;
       await new Promise((resolve) => setTimeout(resolve, backoff + Math.random() * backoff));
     }
   }
@@ -292,6 +292,7 @@ export type GeminiBackend =
 
 export class LiveGeminiClient implements GeminiClient {
   readonly #request?: RequestFunction;
+  readonly #retryBaseDelayMs: number;
   readonly #backend: GeminiBackend;
   readonly #model: string;
   #genai?: GoogleGenAI;
@@ -301,6 +302,8 @@ export class LiveGeminiClient implements GeminiClient {
     vertex?: { project: string; location?: string };
     model?: string;
     request?: RequestFunction;
+    /** Backoff base for throttled calls. Tests set it to 0 so they do not sleep. */
+    retryBaseDelayMs?: number;
   }) {
     if (options.vertex?.project) {
       this.#backend = {
@@ -315,6 +318,7 @@ export class LiveGeminiClient implements GeminiClient {
     }
     this.#model = options.model ?? "gemini-3.8-flash";
     this.#request = options.request;
+    this.#retryBaseDelayMs = options.retryBaseDelayMs ?? 1_000;
   }
 
   #model_(): Gemini {
@@ -383,7 +387,7 @@ export class LiveGeminiClient implements GeminiClient {
     output: z.ZodType<T>,
     media?: { legacy: unknown; part: PartUnion },
   ): Promise<T> {
-    return withRateLimitRetry(() => this.#structuredOnce(spec, prompt, output, media));
+    return withRateLimitRetry(() => this.#structuredOnce(spec, prompt, output, media), this.#retryBaseDelayMs);
   }
 
   async #structuredOnce<T>(
