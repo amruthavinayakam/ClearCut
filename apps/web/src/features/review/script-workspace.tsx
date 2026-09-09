@@ -4,6 +4,7 @@ import type { ClearanceItem, ScreenplayDocument } from "@clearcut/contracts";
 import { FileText, LoaderCircle } from "lucide-react";
 import { useEffect, useMemo, useRef, useState } from "react";
 
+import { ScrollFade } from "@/components/ui/scroll-fade";
 import { cn } from "@/lib/utils";
 
 /**
@@ -147,7 +148,7 @@ export function ScriptWorkspace({
   }
 
   return (
-    <div className="min-h-0 flex-1 overflow-y-auto bg-muted/30 px-4 py-6 sm:px-8">
+    <ScrollFade className="flex-1 bg-muted/30" viewportClassName="h-full overflow-y-auto px-4 py-6 sm:px-8">
       {/* Screenplay measure: a page of script is set narrow, and the mono face
           keeps the scene headings and dialogue aligned as the format expects. */}
       <article ref={pageRef} className="mx-auto max-w-[68ch] rounded-lg bg-background p-6 font-mono text-[12px] leading-[1.7] shadow-[0_1px_2px_oklch(0_0_0/0.05),0_8px_24px_-16px_oklch(0_0_0/0.2)] sm:p-10">
@@ -194,6 +195,6 @@ export function ScriptWorkspace({
           );
         })}
       </article>
-    </div>
+    </ScrollFade>
   );
 }

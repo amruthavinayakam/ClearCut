@@ -32,7 +32,10 @@ export function ReviewWorkspace({ project, initialCaseId }: { project: Project; 
     // The review workspace is a fixed viewport: the page itself never scrolls,
     // each column manages its own overflow. Below xl the columns stack and the
     // whole thing scrolls normally, since a phone has no room for three panes.
-    <main className="flex flex-col xl:h-[calc(100dvh-3rem)] xl:overflow-hidden">
+    // The subtracted pixel is the app header's bottom rule — without it the
+    // workspace is one pixel taller than the space left for it, and the page
+    // scrolls by that pixel.
+    <main className="flex flex-col xl:h-[calc(100dvh-3rem-1px)] xl:overflow-hidden">
       <header className="flex min-h-16 shrink-0 flex-wrap items-center justify-between gap-3 border-b border-border px-3 py-2">
         <div className="flex min-w-0 items-center gap-3">
           <Link aria-label="Back to productions" className={buttonVariants({ size: "icon-sm", variant: "ghost" })} href="/"><ChevronLeft /></Link>
@@ -54,7 +57,7 @@ export function ReviewWorkspace({ project, initialCaseId }: { project: Project; 
         <SourceWorkspace onSelect={select} project={project} selected={selected} />
         {selected
           ? <EvidenceInspector item={selected} key={selected.id} projectId={project.id} />
-          : <aside className="grid min-h-64 place-items-center border-l border-border p-6 text-xs text-muted-foreground">Select a clearance case.</aside>}
+          : <aside className="grid min-h-64 place-items-center border-t border-border p-6 text-xs text-muted-foreground xl:border-l xl:border-t-0">Select a clearance case.</aside>}
       </div>
     </main>
   );

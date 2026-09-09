@@ -161,6 +161,27 @@ select {
   -webkit-tap-highlight-color: transparent;
 }
 
+/* No scrollbars anywhere. A scrolling region signals its overflow with a fade
+   at the edge instead — see the ScrollFade component — which says the same
+   thing without a bar down the side of every panel. */
+* {
+  scrollbar-width: none;
+}
+
+*::-webkit-scrollbar {
+  width: 0;
+  height: 0;
+}
+
+.no-scrollbar {
+  scrollbar-width: none;
+}
+
+.no-scrollbar::-webkit-scrollbar {
+  width: 0;
+  height: 0;
+}
+
 .risk-dot {
   display: inline-block;
   width: 7px;

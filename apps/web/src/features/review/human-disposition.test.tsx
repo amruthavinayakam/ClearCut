@@ -12,9 +12,12 @@ describe("human disposition", () => {
     const user = userEvent.setup();
     render(<HumanDisposition client={{ setStatus: vi.fn() }} item={item} projectId="proj_fixture" />);
 
-    await user.click(screen.getByRole("button", { name: "Coordinator verified" }));
+    // The outcomes moved into the dialog: the panel offers one action, and the
+    // choice is made where the actor and reason are already being asked for.
+    await user.click(screen.getByRole("button", { name: "Record a decision" }));
+    await user.click(screen.getByRole("button", { name: /I verified this/ }));
 
-    expect(screen.getByText("Coordinator action")).toBeVisible();
-    expect(screen.getByRole("button", { name: "Record disposition" })).toBeDisabled();
+    expect(screen.getByText("I verified this", { selector: "h2, [data-slot='alert-dialog-title']" })).toBeVisible();
+    expect(screen.getByRole("button", { name: "Save decision" })).toBeDisabled();
   });
 });

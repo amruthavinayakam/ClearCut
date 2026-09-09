@@ -1,6 +1,8 @@
 import type { EvidenceSource } from "@clearcut/contracts";
 import { ArrowUpRight } from "lucide-react";
 
+import { RETRIEVAL_LABEL } from "./vocabulary";
+
 /** A malformed URL must not take down the ledger it appears in. */
 function hostname(url: string): string {
   try {
@@ -12,7 +14,7 @@ function hostname(url: string): string {
 
 export function SourceLedger({ sources }: { sources: EvidenceSource[] }) {
   if (sources.length === 0) {
-    return <p className="py-5 text-xs text-muted-foreground">No public source is attached to this case yet.</p>;
+    return <p className="py-5 text-xs text-muted-foreground">No sources found for this case yet.</p>;
   }
 
   return (
@@ -20,8 +22,8 @@ export function SourceLedger({ sources }: { sources: EvidenceSource[] }) {
       {sources.map((source, index) => (
         <li className="py-3" key={`${source.url}-${index}`}>
           <div className="flex items-start justify-between gap-3">
-            <span className="font-mono text-[9px] tabular-nums tracking-[0.06em] text-muted-foreground">
-              SRC {String(index + 1).padStart(2, "0")} / {source.via.replaceAll("_", " ").toUpperCase()}
+            <span className="text-[11px] tabular-nums text-muted-foreground">
+              {index + 1} · {RETRIEVAL_LABEL[source.via] ?? source.via.replaceAll("_", " ")}
             </span>
             {/* The visible glyph is 14px; the hit area is padded out to 40px so
                 it is actually clickable, and -mr/-mt pull it back so the
