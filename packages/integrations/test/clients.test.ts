@@ -147,6 +147,9 @@ describe("model throttling", () => {
     let attempts = 0;
     const gemini = new LiveGeminiClient({
       apiKey: "test-key",
+      // The retry schedule is real seconds; the behaviour under test is that it
+      // retries at all, not how long it waits.
+      retryBaseDelayMs: 0,
       request: async () => {
         attempts += 1;
         // Two 429s, exactly what a production's worth of cases hitting the

@@ -20,6 +20,11 @@ body {
   --font-sans: "Geist", "Geist Fallback", ui-sans-serif, system-ui, sans-serif;
   --font-mono: "Geist Mono", "Geist Mono Fallback", ui-monospace, monospace;
   --color-media: var(--media);
+  /* One deceleration curve for the whole interface: a panel opening, a menu
+     appearing and a button releasing should all settle the same way. Motion
+     that starts fast and eases out reads as responsive; ease-in reads as
+     sluggish because the first frames barely move. */
+  --ease-out-quint: cubic-bezier(0.2, 0, 0, 1);
   --color-risk-red: var(--risk-red);
   --color-risk-amber: var(--risk-amber);
   --color-risk-green: var(--risk-green);
