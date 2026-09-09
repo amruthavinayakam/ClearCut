@@ -37,6 +37,8 @@ gcloud services enable \
   cloudbuild.googleapis.com \
   artifactregistry.googleapis.com \
   secretmanager.googleapis.com \
+  firestore.googleapis.com \
+  storage.googleapis.com \
   --quiet
 
 # --- Image registry ----------------------------------------------------------
@@ -88,8 +90,10 @@ done
 # Cloud Build runs as the compute service account and needs to push images and
 # write logs. Without these the build fails with an opaque permissions error.
 echo "--> Granting the build and runtime service account its roles"
-# aiplatform.user is what lets the API call Gemini on Vertex without a key.
-for role in roles/artifactregistry.writer roles/logging.logWriter roles/aiplatform.user; do
+# aiplatform.user lets the API call Gemini on Vertex without a key; datastore.user
+# and storage.objectAdmin are what make project records and media survive a
+# restart instead of dying with the instance.
+for role in roles/artifactregistry.writer roles/logging.logWriter roles/aiplatform.user roles/datastore.user; do
   gcloud projects add-iam-policy-binding "$PROJECT_ID" \
     --member="serviceAccount:${RUNTIME_SA}" \
     --role="$role" \
@@ -127,6 +131,27 @@ if [ "$MOCK_RESEARCH" = "false" ]; then
   API_SECRETS="PARALLEL_API_KEY=parallel-api-key:latest,${API_SECRETS}"
 fi
 
+# --- Durable storage --------------------------------------------------------
+# Cloud Run instances are disposable: without these the API keeps projects in a
+# process-local Map and media in an in-memory /tmp, so every redeploy or idle
+# reclaim silently deletes every production.
+ASSET_BUCKET="${PROJECT_ID}-assets"
+
+if ! gcloud firestore databases describe --database='(default)' >/dev/null 2>&1; then
+  echo "--> Creating the Firestore database"
+  gcloud firestore databases create --location=nam5 --type=firestore-native --quiet
+fi
+
+if ! gcloud storage buckets describe "gs://${ASSET_BUCKET}" >/dev/null 2>&1; then
+  echo "--> Creating the asset bucket gs://${ASSET_BUCKET}"
+  gcloud storage buckets create "gs://${ASSET_BUCKET}" \
+    --location="$REGION" --uniform-bucket-level-access --quiet
+fi
+
+gcloud storage buckets add-iam-policy-binding "gs://${ASSET_BUCKET}" \
+  --member="serviceAccount:${RUNTIME_SA}" \
+  --role=roles/storage.objectAdmin --quiet >/dev/null
+
 # --- API ---------------------------------------------------------------------
 # --no-cpu-throttling is load-bearing, not a tuning knob: the clearance pipeline
 # is started with queueMicrotask *after* the HTTP response is sent. Under the
@@ -153,7 +178,7 @@ gcloud run deploy "$API_SERVICE" \
   --min-instances 1 \
   --max-instances 1 \
   --no-cpu-throttling \
-  --set-env-vars "NODE_ENV=production,MOCK_RESEARCH=${MOCK_RESEARCH},GEMINI_MODEL=gemini-3.8-flash,GOOGLE_CLOUD_PROJECT=${PROJECT_ID},GOOGLE_CLOUD_LOCATION=global,RESEARCH_CONCURRENCY=16,ASSET_STORAGE_DIR=/tmp/clearcut-assets" \
+  --set-env-vars "NODE_ENV=production,MOCK_RESEARCH=${MOCK_RESEARCH},GEMINI_MODEL=gemini-3.8-flash,GOOGLE_CLOUD_PROJECT=${PROJECT_ID},GOOGLE_CLOUD_LOCATION=global,RESEARCH_CONCURRENCY=16,ASSET_STORAGE_DIR=/tmp/clearcut-assets,FIRESTORE_COLLECTION=projects,GCS_BUCKET=${ASSET_BUCKET}" \
   --set-secrets "$API_SECRETS" \
   --quiet
 

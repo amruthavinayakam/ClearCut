@@ -37,6 +37,8 @@ describe("upload preflight", () => {
         geminiModel: "gemini-3.8-flash",
         googleCloudProject: "",
         googleCloudLocation: "us-central1",
+        firestoreCollection: "",
+        gcsBucket: "",
         parallelApiKey: "",
         parallelProcessor: "core",
         parallelMonitorProcessor: "lite",

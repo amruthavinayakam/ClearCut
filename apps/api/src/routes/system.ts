@@ -13,8 +13,12 @@ export function registerSystemRoutes(app: Hono<ClearCutEnv>, dependencies: ApiDe
     project: dependencies.config.googleCloudProject || null,
     search_mode: "basic",
     processor: dependencies.config.parallelProcessor,
-    gcs_bucket: null,
-    asset_store: dependencies.config.cloudflareBindingOrigin ? "r2" : "filesystem",
+    gcs_bucket: dependencies.config.gcsBucket || null,
+    asset_store: dependencies.config.cloudflareBindingOrigin
+      ? "r2"
+      : dependencies.config.gcsBucket ? "gcs" : "filesystem",
+    // Whether a restart keeps the record. Memory and /tmp do not.
+    durable: Boolean(dependencies.config.cloudflareBindingOrigin || dependencies.config.firestoreCollection),
     webhooks_enabled: Boolean(dependencies.config.publicBaseUrl && dependencies.config.webhookSecret),
     sample_available: true,
   }));
