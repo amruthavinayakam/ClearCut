@@ -42,10 +42,30 @@ async function proxy(request: NextRequest, path: string[]): Promise<Response> {
   });
 
   const headers = new Headers(upstream.headers);
+  // The runtime decompressed the upstream body, so whatever encoding it named
+  // no longer describes what is about to be sent, and the length no longer
+  // matches either.
   headers.delete("content-encoding");
   headers.delete("content-length");
 
-  return new Response(upstream.body, {
+  // Compress on the way out. A clearance record is 1.6MB of research prose for
+  // a 70-case production, and shipping it raw through this hop was the bulk of
+  // the fifteen seconds it took to open one. Event streams are left alone:
+  // compressing them buffers the events whose whole point is arriving live.
+  const stream = upstream.body;
+  const isEventStream = (upstream.headers.get("content-type") ?? "").includes("text/event-stream");
+  const acceptsGzip = (request.headers.get("accept-encoding") ?? "").includes("gzip");
+  if (stream && acceptsGzip && !isEventStream) {
+    headers.set("content-encoding", "gzip");
+    headers.append("vary", "accept-encoding");
+    return new Response(stream.pipeThrough(new CompressionStream("gzip")), {
+      status: upstream.status,
+      statusText: upstream.statusText,
+      headers,
+    });
+  }
+
+  return new Response(stream, {
     status: upstream.status,
     statusText: upstream.statusText,
     headers,
