@@ -4,7 +4,7 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "dev": "PORTLESS_TLD=lcl portless clearcut-api bun --hot src/server.ts",
+    "dev": "PORTLESS_TLD=lcl portless clearcut-api bun --hot --env-file=../../.env src/server.ts",
     "build": "bun build src/server.ts --target=bun --outdir=dist",
     "typecheck": "tsc -p tsconfig.json --noEmit",
     "lint": "tsc -p tsconfig.json --noEmit",

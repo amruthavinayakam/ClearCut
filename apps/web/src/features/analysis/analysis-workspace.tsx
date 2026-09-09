@@ -3,7 +3,8 @@
 import type { Project, ProjectStreamEvent } from "@clearcut/contracts";
 import { ArrowRight, Check, Circle, CircleDashed, Radio, RefreshCw } from "lucide-react";
 import Link from "next/link";
-import { useEffect, useMemo, useState } from "react";
+import { useRouter } from "next/navigation";
+import { useEffect, useMemo, useRef, useState } from "react";
 
 import { Badge } from "@/components/ui/badge";
 import { getProject } from "@/lib/api-client";
@@ -42,6 +43,7 @@ export function AnalysisWorkspace({
   feed?: ProjectFeed;
   reader?: ProjectReader;
 }) {
+  const router = useRouter();
   const [project, setProject] = useState(initialProject);
   const [connection, setConnection] = useState<"connecting" | "live" | "polling">("connecting");
   const [lastEvent, setLastEvent] = useState<ProjectStreamEvent | null>(null);
@@ -75,6 +77,17 @@ export function AnalysisWorkspace({
       if (pollTimer) clearInterval(pollTimer);
     };
   }, [activeFeed, initialProject.id, reader]);
+
+  // The route decides between this view and the review workspace from the
+  // phase it fetched on the server. The stream keeps this component current but
+  // cannot change that branch, so a finished run sat on the progress screen
+  // until the reader reloaded. Refresh once, when the phase actually settles.
+  const handedOver = useRef(false);
+  useEffect(() => {
+    if (project.phase !== "ready" || handedOver.current) return;
+    handedOver.current = true;
+    router.refresh();
+  }, [project.phase, router]);
 
   const currentIndex = stageIndex(project.phase);
   const activeMessage = lastEvent && "message" in lastEvent ? lastEvent.message : project.activity_events.at(-1)?.message ?? "Preparing source analysis";

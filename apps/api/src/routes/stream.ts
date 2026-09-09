@@ -3,6 +3,17 @@ import { streamSSE } from "hono/streaming";
 
 import type { ApiDependencies, ClearCutEnv } from "../context";
 
+/**
+ * SSE channel for an event type.
+ *
+ * `error` cannot be used: EventSource dispatches its own `error` event for
+ * transport failures, with no data attached, so a listener bound to that name
+ * receives both and cannot tell them apart.
+ */
+function channel(type: string): string {
+  return type === "error" ? "pipeline_error" : type;
+}
+
 export function registerStreamRoutes(app: Hono<ClearCutEnv>, dependencies: ApiDependencies) {
   app.get("/api/projects/:projectId/stream", async (context) => {
     const projectId = context.req.param("projectId");
@@ -21,7 +32,7 @@ export function registerStreamRoutes(app: Hono<ClearCutEnv>, dependencies: ApiDe
           ? replay
           : [dependencies.events.publish(projectId, { type: "snapshot", project })];
         for (const envelope of initial) {
-          await stream.writeSSE({ id: String(envelope.id), event: envelope.event.type, data: JSON.stringify(envelope.event) });
+          await stream.writeSSE({ id: String(envelope.id), event: channel(envelope.event.type), data: JSON.stringify(envelope.event) });
         }
         while (!closed) {
           const next = await Promise.race([
@@ -34,7 +45,7 @@ export function registerStreamRoutes(app: Hono<ClearCutEnv>, dependencies: ApiDe
           } else if (next.done) {
             break;
           } else {
-            await stream.writeSSE({ id: String(next.value.id), event: next.value.event.type, data: JSON.stringify(next.value.event) });
+            await stream.writeSSE({ id: String(next.value.id), event: channel(next.value.event.type), data: JSON.stringify(next.value.event) });
           }
         }
       } finally {
