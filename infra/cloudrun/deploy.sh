@@ -178,7 +178,7 @@ gcloud run deploy "$API_SERVICE" \
   --min-instances 1 \
   --max-instances 1 \
   --no-cpu-throttling \
-  --set-env-vars "NODE_ENV=production,MOCK_RESEARCH=${MOCK_RESEARCH},GEMINI_MODEL=gemini-3.8-flash,GOOGLE_CLOUD_PROJECT=${PROJECT_ID},GOOGLE_CLOUD_LOCATION=global,RESEARCH_CONCURRENCY=16,ASSET_STORAGE_DIR=/tmp/clearcut-assets,FIRESTORE_COLLECTION=projects,GCS_BUCKET=${ASSET_BUCKET}" \
+  --set-env-vars "NODE_ENV=production,MOCK_RESEARCH=${MOCK_RESEARCH},GEMINI_MODEL=gemini-3.8-flash,GOOGLE_CLOUD_PROJECT=${PROJECT_ID},GOOGLE_CLOUD_LOCATION=global,RESEARCH_CONCURRENCY=32,ASSET_STORAGE_DIR=/tmp/clearcut-assets,FIRESTORE_COLLECTION=projects,GCS_BUCKET=${ASSET_BUCKET}" \
   --set-secrets "$API_SECRETS" \
   --quiet
 
