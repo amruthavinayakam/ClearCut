@@ -17,6 +17,19 @@ describe("screenplay parsing", () => {
     expect(document.scenes[0].index).toBe(1);
   });
 
+  test("pdf lines are lines, not the runs the page was drawn from", async () => {
+    const path = join(media, "the_long_way_down.pdf");
+    const document = await parseScreenplay(await Bun.file(path).bytes(), "the_long_way_down.pdf");
+    const lines = document.scenes[0].text.split("\n");
+
+    // One line of a screenplay is several pdf.js runs. Treating each run as a
+    // line stranded the opening article of an action paragraph on its own.
+    expect(lines).not.toContain("A");
+    expect(lines.some((line) => line.startsWith("A one-room walk-up above a laundromat"))).toBe(true);
+    // Runs are positioned, not spaced: joined without care they read "Aone-room".
+    expect(document.scenes[0].text).not.toMatch(/[a-z][A-Z]/);
+  });
+
   test("video probe reports a positive duration", async () => {
     const result = await probeVideo(join(media, "the_long_way_down_roughcut.mp4"));
     expect(result.durationSeconds).toBeGreaterThan(0);

@@ -3,7 +3,7 @@
 import type { Project, ProjectStreamEvent } from "@clearcut/contracts";
 import { Check, Circle, CircleDashed, Radio, RefreshCw } from "lucide-react";
 import { useRouter } from "next/navigation";
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 import { Badge } from "@/components/ui/badge";
 import { getProject } from "@/lib/api-client";
@@ -48,6 +48,27 @@ export function AnalysisWorkspace({
   const [lastEvent, setLastEvent] = useState<ProjectStreamEvent | null>(null);
   const activeFeed = useMemo(() => feed ?? createBrowserProjectFeed(initialProject.id), [feed, initialProject.id]);
 
+  // Only `snapshot` carries a whole project, and the stream sends one when the
+  // subscription opens. Everything after that reports a change without
+  // restating the record — so without folding those changes in, the phase and
+  // the case counts stayed frozen at whatever the server rendered, the progress
+  // never moved, and the hand-off to the review view never fired.
+  const applyEvent = useCallback((current: Project, event: ProjectStreamEvent): Project => {
+    if (event.type === "progress" || event.type === "done") {
+      return event.phase === current.phase ? current : { ...current, phase: event.phase };
+    }
+    if (event.type === "item_status" || event.type === "item_researched") {
+      const citations = event.type === "item_researched" ? { citation_count: event.citations } : {};
+      return {
+        ...current,
+        items: current.items.map((item) => (
+          item.id === event.item_id ? { ...item, workflow_status: event.status, color: event.color ?? item.color, ...citations } : item
+        )),
+      };
+    }
+    return current;
+  }, []);
+
   useEffect(() => {
     let active = true;
     let pollTimer: ReturnType<typeof setInterval> | undefined;
@@ -61,7 +82,10 @@ export function AnalysisWorkspace({
     };
     const stop = activeFeed.subscribe({
       onProject: setProject,
-      onEvent: setLastEvent,
+      onEvent: (event) => {
+        setLastEvent(event);
+        setProject((current) => applyEvent(current, event));
+      },
       onOpen: () => setConnection("live"),
       onError: () => {
         if (!active) return;
@@ -75,7 +99,7 @@ export function AnalysisWorkspace({
       stop();
       if (pollTimer) clearInterval(pollTimer);
     };
-  }, [activeFeed, initialProject.id, reader]);
+  }, [activeFeed, applyEvent, initialProject.id, reader]);
 
   // The route decides between this view and the review workspace from the
   // phase it fetched on the server. The stream keeps this component current but

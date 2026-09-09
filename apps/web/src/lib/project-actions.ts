@@ -8,14 +8,15 @@ import {
   type StatusChange,
 } from "@clearcut/contracts";
 
-import { ApiClientError } from "./api-client";
+import { ApiClientError, readJsonBody, transportMessage } from "./api-client";
 
 async function jsonResponse<T>(response: Response, parse: (value: unknown) => T): Promise<T> {
-  const data: unknown = await response.json();
+  const data = await readJsonBody(response);
   if (!response.ok) {
     const problem = ApiErrorSchema.safeParse(data);
-    throw new ApiClientError(problem.success ? problem.data.message : "The request failed.", problem.success ? problem.data.code : "request_failed", problem.success ? problem.data.request_id : undefined);
+    throw new ApiClientError(problem.success ? problem.data.message : transportMessage(response.status), problem.success ? problem.data.code : "request_failed", problem.success ? problem.data.request_id : undefined);
   }
+  if (data === null) throw new ApiClientError(transportMessage(response.status), "unreadable_response");
   return parse(data);
 }
 

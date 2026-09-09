@@ -28,6 +28,32 @@ export function isNotFound(error: unknown): boolean {
   return error instanceof ApiClientError && /(^|_)not_found$/.test(error.code);
 }
 
+/**
+ * The response body, or null when it is not JSON.
+ *
+ * A failure between the browser and the API — an upload cut short, a proxy
+ * timeout, a payload the platform rejects — comes back as an HTML error page.
+ * Parsing that as JSON put `Unexpected token '<', "<!DOCTYPE "...` under the
+ * file in the upload dialog, which says nothing about the file or what to do.
+ */
+export async function readJsonBody(response: Response): Promise<unknown> {
+  const text = await response.text();
+  if (!text.trim()) return null;
+  try {
+    return JSON.parse(text);
+  } catch {
+    return null;
+  }
+}
+
+/** What to say when the failure never reached the API's own error handler. */
+export function transportMessage(status: number): string {
+  if (status === 413) return "That file is too large to upload.";
+  if (status === 408 || status === 504) return "The upload timed out before it finished. Try again.";
+  if (status === 502 || status === 503) return "The server was unreachable. Try again in a moment.";
+  return `The request failed with status ${status}.`;
+}
+
 export class ApiClientError extends Error {
   constructor(
     message: string,
@@ -40,12 +66,13 @@ export class ApiClientError extends Error {
 
 export async function apiRequest<T>(path: string, schema: { parse(value: unknown): T }, init?: RequestInit): Promise<T> {
   const response = await fetch(endpoint(path), { cache: "no-store", ...init });
-  const body: unknown = await response.json();
+  const body = await readJsonBody(response);
   if (!response.ok) {
     const parsed = ApiErrorSchema.safeParse(body);
     if (parsed.success) throw new ApiClientError(parsed.data.message, parsed.data.code, parsed.data.request_id);
-    throw new ApiClientError(`Request failed with status ${response.status}.`, "request_failed");
+    throw new ApiClientError(transportMessage(response.status), "request_failed");
   }
+  if (body === null) throw new ApiClientError(transportMessage(response.status), "unreadable_response");
   return schema.parse(body);
 }
 
@@ -54,8 +81,9 @@ export async function apiTextRequest(path: string, init?: RequestInit): Promise<
   if (!response.ok) {
     let message = `Request failed with status ${response.status}.`;
     try {
-      const problem = ApiErrorSchema.safeParse(await response.json());
+      const problem = ApiErrorSchema.safeParse(await readJsonBody(response));
       if (problem.success) message = problem.data.message;
+      else message = transportMessage(response.status);
     } catch {
       // The text boundary may not return JSON for upstream failures.
     }
