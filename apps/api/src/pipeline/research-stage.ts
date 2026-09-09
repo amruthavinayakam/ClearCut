@@ -73,14 +73,20 @@ async function mapConcurrent<T>(values: T[], limit: number, work: (value: T) => 
  */
 const CASE_RESEARCH_TIMEOUT_MS: Record<ResearchDepth, number> = { fast: 90_000, deep: 5 * 60_000 };
 
-function withDeadline<T>(work: Promise<T>, milliseconds: number, message: string): Promise<T> {
+function withDeadline<T>(work: (signal: AbortSignal) => Promise<T>, milliseconds: number, message: string): Promise<T> {
+  const controller = new AbortController();
   let timer: ReturnType<typeof setTimeout>;
-  return Promise.race([
-    work,
-    new Promise<never>((_, reject) => {
-      timer = setTimeout(() => reject(new Error(message)), milliseconds);
-    }),
-  ]).finally(() => clearTimeout(timer)) as Promise<T>;
+  const deadline = new Promise<never>((_, reject) => {
+    timer = setTimeout(() => {
+      // Cancelled, not merely abandoned: a Parallel Task result call holds its
+      // connection open for its own ten-minute budget, so a production's worth
+      // of expired cases would each keep a socket alive long after the evidence
+      // had been written off.
+      controller.abort();
+      reject(new Error(message));
+    }, milliseconds);
+  });
+  return Promise.race([work(controller.signal), deadline]).finally(() => clearTimeout(timer)) as Promise<T>;
 }
 
 export async function researchStage(input: {
@@ -98,8 +104,8 @@ export async function researchStage(input: {
   const caseTimeout = input.caseTimeoutMs ?? CASE_RESEARCH_TIMEOUT_MS[depth];
 
   /** Retrieval always runs on Parallel; only the reasoning over it moves. */
-  const assemble = async (item: ClearanceItem, sources: EvidenceSource[]): Promise<Dossier> => {
-    if (depth === "deep") return parallel.buildDossier(item, project.title, sources);
+  const assemble = async (item: ClearanceItem, sources: EvidenceSource[], signal: AbortSignal): Promise<Dossier> => {
+    if (depth === "deep") return parallel.buildDossier(item, project.title, sources, signal);
     const synthesis = await gemini.synthesizeDossier({ productionTitle: project.title, item, sources });
     const { basis: _basis, ...fields } = synthesis;
     return { ...fields, run_id: `gemini-synthesis:${item.stable_item_id}`, basis: synthesisBasis(synthesis, sources) };
@@ -136,7 +142,7 @@ export async function researchStage(input: {
 
     try {
       const dossier = await withDeadline(
-        assemble(item, item.sources),
+        (signal) => assemble(item, item.sources, signal),
         caseTimeout,
         "Structured research did not return within the time budget for this case.",
       );

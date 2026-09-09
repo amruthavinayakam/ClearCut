@@ -158,7 +158,8 @@ export interface GeminiClient {
 
 export interface ParallelClient {
   searchClearanceItem(item: ClearanceItem, productionTitle: string, sessionId: string): Promise<EvidenceSource[]>;
-  buildDossier(item: ClearanceItem, productionTitle: string, sources: EvidenceSource[]): Promise<z.infer<typeof DossierSchema>>;
+  /** `signal` cancels the run; a Task result call otherwise holds its socket for its own ten-minute budget. */
+  buildDossier(item: ClearanceItem, productionTitle: string, sources: EvidenceSource[], signal?: AbortSignal): Promise<z.infer<typeof DossierSchema>>;
   createMonitor(item: ClearanceItem, productionTitle: string, projectId: string, frequency: string): Promise<MonitorRecord>;
   readMonitorEvents(monitorId: string): Promise<MonitorRecord["events"]>;
 }

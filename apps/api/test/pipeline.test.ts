@@ -97,7 +97,10 @@ describe("analysis orchestration", () => {
     // A dossier that never settles is the shape that held whole productions in
     // "analysing" while every other case had already finished.
     const parallel = new FixtureParallelClient();
-    parallel.buildDossier = () => new Promise<never>(() => {});
+    let cancelled = false;
+    parallel.buildDossier = (_item, _title, _sources, signal) => new Promise<never>((_resolve, reject) => {
+      signal?.addEventListener("abort", () => { cancelled = true; reject(new Error("aborted")); });
+    });
     parallel.searchClearanceItem = async () => [];
 
     await researchStage({
@@ -113,6 +116,8 @@ describe("analysis orchestration", () => {
 
     expect(project.items[0].workflow_status).toBe("unresolved");
     expect(project.items[0].research_error).toMatch(/time budget/i);
+    // The expired run is cancelled, not left holding its connection.
+    expect(cancelled).toBe(true);
   });
 
   test("fast research reasons over retrieved sources without a Parallel Task", async () => {
