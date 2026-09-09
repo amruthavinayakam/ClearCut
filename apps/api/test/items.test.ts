@@ -59,4 +59,33 @@ describe("guarded case mutations", () => {
     expect(project.items[0].audit_events.at(-1)?.action).toBe("assignment_changed");
     expect(project.audit_events.at(-1)?.action).toBe("intended_use_updated");
   });
+
+  test("a coordinator's decision is counted as decided without being called resolved", async () => {
+    const { app, repository } = await createTestApi();
+    const project = ProjectSchema.parse(fixture);
+    await repository.save(project);
+    const item = project.items[0];
+
+    const response = await app.request(`/api/projects/${project.id}/items/${item.id}/status`, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({
+        status: "coordinator_verified",
+        actor: "coordinator",
+        actor_name: "A Coordinator",
+        rationale: "Checked the listing against the cue sheet.",
+        document_ids: [],
+      }),
+    });
+    expect(response.status).toBe(200);
+
+    const saved = await repository.require(project.id);
+    // Only counsel approval, a filed permission, an approved replacement or a
+    // false positive resolves a case — but the work still has to show as done
+    // somewhere, or recording it looks like nothing happened.
+    expect(saved.summary.decided_items).toBe(1);
+    expect(saved.summary.resolved_items).toBe(0);
+    const decisions = saved.items[0].audit_events.filter((event) => event.actor === "coordinator");
+    expect(decisions.at(-1)?.actor_name).toBe("A Coordinator");
+  });
 });

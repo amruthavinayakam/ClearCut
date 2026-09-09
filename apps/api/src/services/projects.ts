@@ -7,6 +7,7 @@ import {
   type ProjectListItem,
   type ScriptVersion,
 } from "@clearcut/contracts";
+import { hasHumanDecision } from "@clearcut/domain";
 
 import type { ApiDependencies } from "../context";
 import type { StoredAsset } from "../repositories/asset-store";
@@ -29,6 +30,7 @@ export function projectSummary(project: Project) {
     total_items: project.items.length,
     unscripted_items: project.items.filter((item) => item.provenance === "cut_only").length,
     resolved_items: project.items.filter((item) => item.is_resolved).length,
+    decided_items: project.items.filter((item) => hasHumanDecision(item)).length,
     total_citations: new Set(project.items.flatMap((item) => item.sources.map((source) => source.url))).size,
     reconciliation: Object.fromEntries(
       ["in_both", "script_only", "cut_only", "materially_changed", "approval_stale"]

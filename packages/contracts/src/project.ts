@@ -257,6 +257,14 @@ export const ProjectSummarySchema = z.object({
   total_items: z.number().int().nonnegative(),
   unscripted_items: z.number().int().nonnegative(),
   resolved_items: z.number().int().nonnegative(),
+  /**
+   * Cases a person has ruled on, which is not the same as resolved: a
+   * coordinator's verification is a decision, but only counsel approval, a
+   * filed permission, an approved replacement or a false positive resolves a
+   * case. Counting only the latter made recording a decision look like nothing
+   * had happened.
+   */
+  decided_items: z.number().int().nonnegative().default(0),
   total_citations: z.number().int().nonnegative(),
   reconciliation: z.record(z.string(), z.number().int().nonnegative()),
   ai_issued_approvals: z.number().int().nonnegative(),
