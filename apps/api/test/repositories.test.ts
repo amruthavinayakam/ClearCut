@@ -2,6 +2,7 @@ import { afterEach, describe, expect, test } from "bun:test";
 import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import { gunzipSync, gzipSync } from "node:zlib";
 
 import fixture from "../../../fixtures/project-ready.json";
 import { ProjectSchema } from "@clearcut/contracts";
@@ -58,5 +59,31 @@ describe("filesystem asset store", () => {
     const store = new FilesystemAssetStore(root);
 
     await expect(store.read("../secret")).rejects.toThrow("invalid_asset_key");
+  });
+});
+
+describe("firestore project blobs", () => {
+  test("a production too large for a Firestore document fits once compressed", async () => {
+    const project = ProjectSchema.parse(fixture);
+    // The shape that broke production: many cases, each carrying its sources.
+    project.items = Array.from({ length: 80 }, (_, index) => ({
+      ...project.items[0],
+      id: `case_${index}`,
+      stable_item_id: `stable_${index}`,
+      sources: Array.from({ length: 12 }, (_, source) => ({
+        ...project.items[0].sources[0],
+        url: `https://example.gov/${index}/${source}`,
+        excerpt: "Registry text ".repeat(80),
+      })),
+    }));
+
+    const json = Buffer.from(JSON.stringify(project), "utf8");
+    const compressed = gzipSync(json);
+    const FIRESTORE_LIMIT = 1_048_487;
+
+    expect(json.byteLength).toBeGreaterThan(FIRESTORE_LIMIT);
+    expect(compressed.byteLength).toBeLessThan(FIRESTORE_LIMIT);
+    // And it round-trips: a blob that cannot be read back is no better.
+    expect(JSON.parse(gunzipSync(compressed).toString("utf8")).id).toBe(project.id);
   });
 });
