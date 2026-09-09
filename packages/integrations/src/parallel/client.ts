@@ -1,5 +1,8 @@
 import Parallel from "parallel-web";
 
+/** How long Parallel may hold the Task result connection open, in seconds. */
+const TASK_RESULT_WAIT_SECONDS = 600;
+
 import {
   EvidenceSourceSchema,
   MonitorRecordSchema,
@@ -223,9 +226,20 @@ export class LiveParallelClient implements ParallelClient {
     const created = await this.#call("task_create", params, (client) => client.taskRun.create(params)) as { run_id?: string };
     if (!created.run_id) throw new Error("Parallel Task did not return a run_id.");
     const runId = created.run_id;
-    const result = await this.#call(`task_result:${runId}`, {}, (client) => client.taskRun.result(runId)) as {
-      output?: { content?: unknown; basis?: unknown };
-    };
+    // `/result` holds the connection open until the run finishes, which for the
+    // `core` processor is minutes. Without an explicit budget the SDK's default
+    // client timeout fires first and every dossier fails as "Connection error."
+    // The server-side wait is bounded just under the client's, so a slow run
+    // returns a timeout we can report rather than a dropped socket.
+    const result = await this.#call(
+      `task_result:${runId}`,
+      {},
+      (client) => client.taskRun.result(
+        runId,
+        { timeout: TASK_RESULT_WAIT_SECONDS },
+        { timeout: (TASK_RESULT_WAIT_SECONDS + 30) * 1_000, maxRetries: 2 },
+      ),
+    ) as { output?: { content?: unknown; basis?: unknown } };
     const content = typeof result.output?.content === "string"
       ? JSON.parse(result.output.content)
       : result.output?.content;
