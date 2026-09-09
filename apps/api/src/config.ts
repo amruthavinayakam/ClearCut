@@ -36,7 +36,11 @@ export function readConfig(env: Record<string, string | undefined> = process.env
     ffprobePath: env.FFPROBE_PATH ?? "ffprobe",
     maxUploadBytes: positiveInteger(env.MAX_UPLOAD_BYTES, 200 * 1024 * 1024),
     mockResearch: env.MOCK_RESEARCH?.toLocaleLowerCase() === "true",
-    researchConcurrency: positiveInteger(env.RESEARCH_CONCURRENCY, 16),
+    // A `core` Task run measures around four minutes, so wall-clock time is
+    // set by how many waves the pool needs, not by throughput. 19 cases against
+    // 16 workers cost two full waves for the sake of three cases; a ceiling
+    // above a typical production's case count keeps it to one.
+    researchConcurrency: positiveInteger(env.RESEARCH_CONCURRENCY, 32),
     googleApiKey: env.GOOGLE_API_KEY?.trim() ?? "",
     geminiModel: env.GEMINI_MODEL?.trim() ?? "gemini-3.8-flash",
     // Set GOOGLE_CLOUD_PROJECT to bill Gemini through Vertex AI on the project's

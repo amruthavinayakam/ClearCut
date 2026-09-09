@@ -88,6 +88,13 @@ export function AnalysisWorkspace({
     router.refresh();
   }, [project.phase, router]);
 
+  // A case is settled once it leaves the researching state, whether that ended
+  // in evidence or in a gap.
+  const researched = {
+    done: project.items.filter((item) => item.workflow_status !== "researching" && item.workflow_status !== "detected").length,
+    total: project.items.length,
+  };
+
   const currentIndex = stageIndex(project.phase);
   const activeMessage = lastEvent && "message" in lastEvent ? lastEvent.message : project.activity_events.at(-1)?.message ?? "Preparing source analysis";
 
@@ -111,6 +118,14 @@ export function AnalysisWorkspace({
                 <li className={cn("flex min-h-9 items-center gap-2.5 rounded-md px-2 text-xs", active ? "bg-muted text-foreground" : "text-muted-foreground")} key={stage.key}>
                   {complete ? <Check className="size-3.5 text-risk-green" /> : active ? <CircleDashed className="size-3.5 animate-spin text-primary" /> : <Circle className="size-3.5" />}
                   <span>{stage.label}</span>
+                  {/* Research is the long stage — minutes per case, many cases
+                      at once. A lone spinner over that span reads as stuck, so
+                      it reports how many cases have actually settled. */}
+                  {stage.key === "researching" && active && researched.total > 0 && (
+                    <span className="ml-auto font-mono text-[10px] tabular-nums text-muted-foreground">
+                      {researched.done}/{researched.total}
+                    </span>
+                  )}
                 </li>
               );
             })}

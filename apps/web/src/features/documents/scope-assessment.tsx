@@ -12,8 +12,8 @@ export function ScopeAssessment({ assessment }: { assessment: ScopeAssessmentVal
   const Icon = assessment.outcome === "covers" ? CheckCircle2 : assessment.outcome === "unknown" ? HelpCircle : AlertCircle;
   return (
     <section aria-label="Recorded scope assessment" className="border-y border-border py-3">
-      <div className="flex items-center gap-2"><Icon className={`size-3.5 ${assessment.outcome === "covers" ? "text-risk-green" : "text-risk-amber"}`} /><span className="text-xs font-medium">{labels[assessment.outcome]}</span><span className="ml-auto font-mono text-[9px] text-muted-foreground">Metadata comparison only</span></div>
-      {assessment.gaps.length > 0 && <ul className="mt-2 space-y-1 pl-5 text-[11px] text-muted-foreground">{assessment.gaps.map((gap) => <li className="list-disc" key={gap}>{gap}</li>)}</ul>}
+      <div className="flex items-center gap-2"><Icon className={`size-3.5 ${assessment.outcome === "covers" ? "text-risk-green" : "text-risk-amber"}`} /><span className="text-xs font-medium">{labels[assessment.outcome]}</span><span className="ml-auto font-mono text-[9px] tracking-[0.06em] whitespace-nowrap text-muted-foreground">Metadata comparison only</span></div>
+      {assessment.gaps.length > 0 && <ul className="mt-2 list-outside list-disc space-y-1 pl-5 text-xs leading-5 text-pretty text-muted-foreground">{assessment.gaps.map((gap) => <li key={gap}>{gap}</li>)}</ul>}
     </section>
   );
 }

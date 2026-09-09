@@ -38,14 +38,39 @@ async function mapConcurrent<T>(values: T[], limit: number, work: (value: T) => 
   await Promise.all(workers);
 }
 
+/**
+ * How long one case may spend in structured research before the pipeline gives
+ * up on it.
+ *
+ * Research runs concurrently, but the production is only `ready` once every
+ * case has settled — so a single hung run holds the whole thing in "analysing"
+ * indefinitely while the other results sit there finished. A case that has not
+ * returned by now is an outlier, and an outlier should become a visible gap
+ * rather than an open-ended wait.
+ */
+const CASE_RESEARCH_TIMEOUT_MS = 8 * 60_000;
+
+function withDeadline<T>(work: Promise<T>, milliseconds: number, message: string): Promise<T> {
+  let timer: ReturnType<typeof setTimeout>;
+  return Promise.race([
+    work,
+    new Promise<never>((_, reject) => {
+      timer = setTimeout(() => reject(new Error(message)), milliseconds);
+    }),
+  ]).finally(() => clearTimeout(timer)) as Promise<T>;
+}
+
 export async function researchStage(input: {
   project: Project;
   repository: ProjectRepository;
   parallel: ParallelClient;
   events: ProjectEventBus;
   concurrency: number;
+  /** Overridable so the deadline can be exercised without waiting for it. */
+  caseTimeoutMs?: number;
 }): Promise<Project> {
   const { project, repository, parallel, events } = input;
+  const caseTimeout = input.caseTimeoutMs ?? CASE_RESEARCH_TIMEOUT_MS;
   await mapConcurrent(project.items.map((_, index) => index), input.concurrency, async (index) => {
     let item = project.items[index];
     if (!hasHumanDecision(item)) {
@@ -76,7 +101,11 @@ export async function researchStage(input: {
     }
 
     try {
-      const dossier = await parallel.buildDossier(item, project.title, sources);
+      const dossier = await withDeadline(
+        parallel.buildDossier(item, project.title, sources),
+        caseTimeout,
+        "Structured research did not return within the time budget for this case.",
+      );
       item = {
         ...item,
         candidate_rights_holders: dossier.candidate_rights_holders,
