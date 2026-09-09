@@ -28,6 +28,17 @@ export class FirestoreProjectRepository implements ProjectRepository {
   readonly #firestore: Firestore;
   readonly #collection: string;
   readonly #blobs: AssetStore | null;
+  /**
+   * One write at a time per record.
+   *
+   * Research saves the production after every case with dozens in flight, so
+   * without this the same object is written concurrently — and the store
+   * verifies a write by re-reading the object's size, which a racing write
+   * changes underneath it. The result was a spurious "stored bytes do not match
+   * the declared size" that failed the whole run. Serialising also gives
+   * last-write-wins rather than an interleave.
+   */
+  readonly #writes = new Map<string, Promise<unknown>>();
 
   constructor(options: { projectId: string; collection?: string; databaseId?: string; blobs?: AssetStore }) {
     this.#firestore = new Firestore({
@@ -68,6 +79,19 @@ export class FirestoreProjectRepository implements ProjectRepository {
 
   async save(project: Project): Promise<Project> {
     const parsed = ProjectSchema.parse(project);
+    const queued = (this.#writes.get(parsed.id) ?? Promise.resolve())
+      .catch(() => undefined)
+      .then(() => this.#write(parsed));
+    this.#writes.set(parsed.id, queued);
+    try {
+      await queued;
+    } finally {
+      if (this.#writes.get(parsed.id) === queued) this.#writes.delete(parsed.id);
+    }
+    return structuredClone(parsed);
+  }
+
+  async #write(parsed: Project): Promise<void> {
     const blob = gzipSync(Buffer.from(JSON.stringify(parsed), "utf8"));
     const index = {
       title: parsed.title,
@@ -92,7 +116,6 @@ export class FirestoreProjectRepository implements ProjectRepository {
     } else {
       await this.#firestore.collection(this.#collection).doc(parsed.id).set({ ...index, data: blob });
     }
-    return structuredClone(parsed);
   }
 
   async remove(id: string): Promise<void> {
