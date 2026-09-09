@@ -16,18 +16,24 @@ const config = readConfig();
 const bindingClient = config.cloudflareBindingOrigin
   ? new CloudflareBindingClient({ origin: config.cloudflareBindingOrigin, nonce: config.cloudflareBindingNonce })
   : null;
-const repository = bindingClient
-  ? new D1ProjectRepository(bindingClient)
-  : config.firestoreCollection
-    ? new FirestoreProjectRepository({ projectId: config.googleCloudProject, collection: config.firestoreCollection })
-    // Local runs still get durable storage: a dev-server restart is not a
-    // reason for a coordinator's productions to disappear.
-    : new FilesystemProjectRepository(config.projectStorageDir);
+// The blob store is built first: the project repository writes its records into
+// it, because a clearance record outgrows what a Firestore document can hold.
 const assetStore = bindingClient
   ? new R2AssetStore(bindingClient)
   : config.gcsBucket
     ? new GcsAssetStore({ bucket: config.gcsBucket, projectId: config.googleCloudProject })
     : new FilesystemAssetStore(config.assetStorageDir);
+const repository = bindingClient
+  ? new D1ProjectRepository(bindingClient)
+  : config.firestoreCollection
+    ? new FirestoreProjectRepository({
+      projectId: config.googleCloudProject,
+      collection: config.firestoreCollection,
+      blobs: assetStore,
+    })
+    // Local runs still get durable storage: a dev-server restart is not a
+    // reason for a coordinator's productions to disappear.
+    : new FilesystemProjectRepository(config.projectStorageDir);
 const monitors = new MemoryMonitorRepository();
 const events = new ProjectEventBus();
 const gemini = config.mockResearch
