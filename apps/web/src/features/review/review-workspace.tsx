@@ -13,7 +13,7 @@ import { useProjectCrumb } from "@/app/(product)/_components/product-shell";
 import { CaseRail } from "./case-rail";
 import { ProjectActionsMenu } from "./project-actions-menu";
 import { EvidenceInspector } from "./evidence-inspector";
-import { PictureWorkspace } from "./picture-workspace";
+import { SourceWorkspace } from "./source-workspace";
 
 export function ReviewWorkspace({ project, initialCaseId }: { project: Project; initialCaseId?: string | null }) {
   const firstId = initialCaseId && project.items.some((item) => item.id === initialCaseId) ? initialCaseId : project.items[0]?.id ?? null;
@@ -51,7 +51,7 @@ export function ReviewWorkspace({ project, initialCaseId }: { project: Project; 
           player's controls past the bottom of the viewport. */}
       <div className="grid min-h-0 flex-1 grid-cols-1 xl:grid-cols-[260px_minmax(420px,1fr)_380px] xl:grid-rows-[minmax(0,1fr)]">
         <CaseRail items={project.items} onSelect={select} selectedId={selectedId} />
-        <PictureWorkspace onSelect={select} project={project} selected={selected} />
+        <SourceWorkspace onSelect={select} project={project} selected={selected} />
         {selected
           ? <EvidenceInspector item={selected} key={selected.id} projectId={project.id} />
           : <aside className="grid min-h-64 place-items-center border-l border-border p-6 text-xs text-muted-foreground">Select a clearance case.</aside>}

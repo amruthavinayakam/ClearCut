@@ -51,6 +51,20 @@ export const AppConfigSchema = z.object({
   durable: z.boolean().default(false),
 }).strict();
 
+/** The screenplay as the pipeline parsed it, for the script viewer. */
+export const ScreenplaySceneSchema = z.object({
+  index: z.number().int(),
+  heading: z.string(),
+  page: z.number().int().nullable(),
+  text: z.string(),
+}).strict();
+
+export const ScreenplayDocumentSchema = z.object({
+  title: z.string(),
+  page_count: z.number().int().nonnegative(),
+  scenes: z.array(ScreenplaySceneSchema),
+}).strict();
+
 export const ProjectListSchema = z.object({
   projects: z.array(ProjectListItemSchema),
 }).strict();
@@ -163,6 +177,8 @@ export const DocumentMetadataPatchSchema = z.object({
 export type ApiError = z.infer<typeof ApiErrorSchema>;
 export type PreflightResult = z.infer<typeof PreflightResultSchema>;
 export type AppConfig = z.infer<typeof AppConfigSchema>;
+export type ScreenplayScene = z.infer<typeof ScreenplaySceneSchema>;
+export type ScreenplayDocument = z.infer<typeof ScreenplayDocumentSchema>;
 export type RevisionApplyResult = z.infer<typeof RevisionApplyResultSchema>;
 export type StatusChange = z.infer<typeof StatusChangeSchema>;
 export type CoordinationChange = z.infer<typeof CoordinationChangeSchema>;

@@ -18,7 +18,7 @@ export function PictureWorkspace({ project, selected, onSelect }: { project: Pro
     <section
       // min-h-0 lets this column be bounded by the page rather than by the
       // video's natural height, which is what made it overrun.
-      className="flex min-h-0 min-w-0 flex-col overflow-hidden bg-media"
+      className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden bg-media"
       data-selected-case={selected?.id ?? ""}
       data-testid="media-canvas"
     >

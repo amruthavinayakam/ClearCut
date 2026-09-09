@@ -180,6 +180,14 @@ select {
 .risk-dot--gray,
 .risk-fill--gray { background: var(--muted-foreground); }
 
+/* Script highlights: a wash strong enough to find while scanning a page, light
+   enough to keep the screenplay underneath readable. */
+.risk-highlight--red { background: color-mix(in oklch, var(--risk-red) 20%, transparent); }
+.risk-highlight--amber { background: color-mix(in oklch, var(--risk-amber) 26%, transparent); }
+.risk-highlight--blue { background: color-mix(in oklch, var(--primary) 18%, transparent); }
+.risk-highlight--green { background: color-mix(in oklch, var(--risk-green) 20%, transparent); }
+.risk-highlight--gray { background: color-mix(in oklch, var(--muted-foreground) 18%, transparent); }
+
 /* Category tiles: the icon carries the risk colour, on a wash of the same hue
    so the tile reads as tinted rather than as a saturated chip. */
 .risk-tint--red { color: var(--risk-red); background: color-mix(in oklch, var(--risk-red) 12%, transparent); }
