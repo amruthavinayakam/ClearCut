@@ -15,4 +15,6 @@ export interface ProjectRepository {
   get(id: string): Promise<Project | null>;
   require(id: string): Promise<Project>;
   save(project: Project): Promise<Project>;
+  /** Removes the record permanently. Callers delete the media separately. */
+  remove(id: string): Promise<void>;
 }

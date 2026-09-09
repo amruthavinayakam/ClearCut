@@ -2,10 +2,9 @@
 
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
-import { Command, FileSearch, FolderOpen, HelpCircle, Settings } from "lucide-react";
+import { FileSearch, FolderOpen, HelpCircle, Search, Settings } from "lucide-react";
 import { createContext, useContext, useEffect, useState } from "react";
 
-import { Button } from "@/components/ui/button";
 import {
   CommandDialog,
   CommandEmpty,
@@ -98,21 +97,20 @@ export function ProductShell({ children }: { children: React.ReactNode }) {
           ))}
         </nav>
 
-        <div className="ml-auto flex items-center gap-1.5">
-          {/* The standing boundary on the product, not a page-level note. */}
-          <span className="hidden font-mono text-[9px] tracking-[0.08em] text-muted-foreground md:inline">
-            RESEARCH SUPPORT · NOT LEGAL ADVICE
-          </span>
-          <Button
-            className="h-8 gap-1.5 text-muted-foreground"
+        <div className="ml-auto flex items-center">
+          {/* Reads as the search field it opens. The previous version paired a
+              ⌘ glyph with the word "Commands" and a ⌘K hint — the same signal
+              three times — and stripping it back to a bare chip left nothing
+              saying what the control was for. */}
+          <button
+            className="flex h-8 items-center gap-2 rounded-md border border-border bg-muted/40 pl-2.5 pr-1.5 text-[13px] text-muted-foreground transition-colors hover:bg-muted hover:text-foreground sm:w-56"
             onClick={() => setCommandsOpen(true)}
-            size="sm"
-            variant="ghost"
+            type="button"
           >
-            <Command className="size-3.5" />
-            <span className="hidden sm:inline">Commands</span>
-            <kbd className="font-mono text-[9px] text-muted-foreground">⌘K</kbd>
-          </Button>
+            <Search className="size-3.5 shrink-0" />
+            <span>Search</span>
+            <kbd className="ml-auto hidden rounded border border-border bg-background px-1 py-0.5 font-mono text-[9px] sm:block">⌘K</kbd>
+          </button>
         </div>
       </header>
 

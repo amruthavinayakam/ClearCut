@@ -7,7 +7,7 @@ import { VERIFIED_SAMPLE_TITLE } from "@clearcut/integrations";
 
 import type { ApiDependencies, ClearCutEnv } from "../context";
 import { ApiProblem } from "../middleware/errors";
-import { createProjectRecord, projectListItem, setArchived, withSummary } from "../services/projects";
+import { createProjectRecord, deleteProject, projectListItem, renameProject, setArchived, withSummary } from "../services/projects";
 import { preflightFile } from "../services/uploads";
 
 function uploadKey(projectId: string, kind: "script" | "cut", filename: string): string {
@@ -125,8 +125,26 @@ export function registerProjectRoutes(app: Hono<ClearCutEnv>, dependencies: ApiD
   });
 
   app.patch("/api/projects/:projectId", async (context) => {
-    const input = z.object({ archived: z.boolean() }).strict().parse(await context.req.json());
+    const input = z.object({
+      archived: z.boolean().optional(),
+      title: z.string().trim().min(1).max(200).optional(),
+    }).strict().refine((value) => value.archived !== undefined || value.title !== undefined, {
+      message: "Provide archived, title, or both.",
+    }).parse(await context.req.json());
+
+    let project = await dependencies.repository.require(context.req.param("projectId"));
+    if (input.title !== undefined && input.title !== project.title) {
+      project = await renameProject(dependencies, project, input.title);
+    }
+    if (input.archived !== undefined && Boolean(project.archived_at) !== input.archived) {
+      project = await setArchived(dependencies, project, input.archived);
+    }
+    return context.json(project);
+  });
+
+  app.delete("/api/projects/:projectId", async (context) => {
     const project = await dependencies.repository.require(context.req.param("projectId"));
-    return context.json(await setArchived(dependencies, project, input.archived));
+    await deleteProject(dependencies, project);
+    return context.body(null, 204);
   });
 }

@@ -35,4 +35,8 @@ export class D1ProjectRepository implements ProjectRepository {
     });
     return ProjectSchema.parse(saved);
   }
+
+  async remove(id: string): Promise<void> {
+    await this.client.json(`/projects/${encodeURIComponent(id)}`, { method: "DELETE" });
+  }
 }

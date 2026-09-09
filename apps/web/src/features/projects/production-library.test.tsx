@@ -19,11 +19,20 @@ const project: ProjectListItem = {
 };
 
 describe("production library", () => {
-  test("exposes phase and unresolved work in a table", () => {
+  test("exposes state, inputs and open work as scannable chips", () => {
     render(<ProductionLibrary archived={false} projects={[project]} />);
 
     expect(screen.getByRole("table")).toBeVisible();
     expect(screen.getByText("Needs review")).toBeVisible();
-    expect(screen.getByText("3 unresolved")).toBeVisible();
+    // One chip carries both counts, so the row stays a single line.
+    expect(screen.getByText("3 of 14 open")).toBeVisible();
+    expect(screen.getByText("Script")).toBeVisible();
+    expect(screen.getByText("Cut")).toBeVisible();
+  });
+
+  test("a running scan reports its phase instead of a workflow state", () => {
+    render(<ProductionLibrary archived={false} projects={[{ ...project, phase: "researching", state_label: "Processing" }]} />);
+
+    expect(screen.getByText("Researching")).toBeVisible();
   });
 });

@@ -1,16 +1,17 @@
 "use client";
 
 import type { Project } from "@clearcut/contracts";
-import { ChevronLeft, Download, GitCompareArrows, MoreHorizontal } from "lucide-react";
+import { ChevronLeft, Download, GitCompareArrows } from "lucide-react";
 import Link from "next/link";
 import { useMemo, useState } from "react";
 
-import { Button, buttonVariants } from "@/components/ui/button";
+import { buttonVariants } from "@/components/ui/button";
 import { CopilotSheet } from "@/features/copilot/copilot-sheet";
 
 import { useProjectCrumb } from "@/app/(product)/_components/product-shell";
 
 import { CaseRail } from "./case-rail";
+import { ProjectActionsMenu } from "./project-actions-menu";
 import { EvidenceInspector } from "./evidence-inspector";
 import { PictureWorkspace } from "./picture-workspace";
 
@@ -41,7 +42,7 @@ export function ReviewWorkspace({ project, initialCaseId }: { project: Project; 
           <CopilotSheet projectId={project.id} />
           <Link className={buttonVariants({ size: "sm", variant: "outline" })} href={`/projects/${project.id}/revisions/new`}><GitCompareArrows /> New version</Link>
           <Link className={buttonVariants({ size: "sm" })} href={`/projects/${project.id}/packet`}><Download /> Packet</Link>
-          <Button aria-label="More project actions" size="icon-sm" variant="ghost"><MoreHorizontal /></Button>
+          <ProjectActionsMenu archived={Boolean(project.archived_at)} projectId={project.id} title={project.title} />
         </div>
       </header>
       {/* minmax(0,1fr) on the row is what makes the columns scrollable. An auto
