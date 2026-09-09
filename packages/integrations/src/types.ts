@@ -107,11 +107,21 @@ export type ReconcileInput = {
   cut: z.infer<typeof CutCandidateSchema>[];
 };
 
+export type CopilotInput = { project: Project; question: string };
+
 export interface GeminiClient {
   scanScreenplay(input: ScriptScanInput): Promise<z.infer<typeof ScriptScanResultSchema>>;
   scanCut(input: CutScanInput): Promise<z.infer<typeof CutScanResultSchema>>;
   reconcile(input: ReconcileInput): Promise<z.infer<typeof ReconciliationResultSchema>>;
-  answerCopilot(input: { project: Project; question: string }): Promise<z.infer<typeof CopilotAnswerSchema>>;
+  answerCopilot(input: CopilotInput): Promise<z.infer<typeof CopilotAnswerSchema>>;
+  /**
+   * Streams the copilot answer as markdown deltas.
+   *
+   * This path deliberately drops the JSON output schema the non-streaming call
+   * uses: a half-received JSON envelope cannot be rendered, whereas partial
+   * markdown can. Citations come from the stored record once the text ends.
+   */
+  streamCopilot(input: CopilotInput): AsyncIterable<string>;
 }
 
 export interface ParallelClient {
