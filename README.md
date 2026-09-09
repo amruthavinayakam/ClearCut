@@ -81,7 +81,7 @@ Fixture mode is explicit and every human-facing fixture value is prefixed `MOCK:
 | `GOOGLE_API_KEY` | — | Google AI Studio key for live Gemini analysis |
 | `GEMINI_MODEL` | `gemini-3.8-flash` | Gemini model used for structured multimodal output |
 | `PARALLEL_API_KEY` | — | Parallel Search, Task, and Monitor key |
-| `PARALLEL_PROCESSOR` | `core` | Structured Task processor. `lite` and `base` return sooner with less depth; `core` runs about four minutes per case |
+| `PARALLEL_PROCESSOR` | `base` | Structured Task processor. `lite` is faster still, `core` and `pro` research deeper and take considerably longer |
 | `PARALLEL_MONITOR_PROCESSOR` | `lite` | Monitor processor |
 | `RESEARCH_CONCURRENCY` | `32` | Concurrent per-case research jobs |
 | `MOCK_RESEARCH` | `false` | Use deterministic fixture integrations instead of live providers |

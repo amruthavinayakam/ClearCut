@@ -53,7 +53,11 @@ export function readConfig(env: Record<string, string | undefined> = process.env
     firestoreCollection: env.FIRESTORE_COLLECTION?.trim() ?? "",
     gcsBucket: env.GCS_BUCKET?.trim() ?? "",
     parallelApiKey: env.PARALLEL_API_KEY?.trim() ?? "",
-    parallelProcessor: env.PARALLEL_PROCESSOR?.trim() ?? "core",
+    // `base` over `core`: a core run measured around four minutes per case,
+    // which put a whole production out of reach of an interactive review.
+    // Depth drops with it — fewer supporting excerpts and confidences — so this
+    // is a latency choice, reversible with the env var.
+    parallelProcessor: env.PARALLEL_PROCESSOR?.trim() ?? "base",
     parallelMonitorProcessor: env.PARALLEL_MONITOR_PROCESSOR?.trim() ?? "lite",
     publicBaseUrl: env.PUBLIC_BASE_URL?.trim() ?? "",
     webhookSecret: env.PARALLEL_WEBHOOK_SECRET?.trim() ?? "",
