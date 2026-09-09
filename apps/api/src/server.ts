@@ -78,6 +78,12 @@ const server = Bun.serve({
   hostname: config.host,
   port: config.port,
   fetch: app.fetch,
+  // Bun closes an idle connection after ten seconds by default, which is
+  // shorter than the progress stream's fifteen-second heartbeat: every live
+  // feed was being dropped and reconnected before it could say anything, so an
+  // analysis in flight looked frozen. The stream needs a ceiling above its own
+  // quiet period, not below it.
+  idleTimeout: 120,
 });
 
 console.log(`ClearCut API listening on ${server.url}`);
