@@ -28,4 +28,8 @@ export class MemoryProjectRepository implements ProjectRepository {
     this.#projects.set(validated.id, structuredClone(validated));
     return structuredClone(validated);
   }
+
+  async remove(id: string): Promise<void> {
+    this.#projects.delete(id);
+  }
 }

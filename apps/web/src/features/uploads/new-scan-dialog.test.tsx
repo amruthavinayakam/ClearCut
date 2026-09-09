@@ -4,7 +4,7 @@ import fixture from "../../../../../fixtures/project-ready.json";
 import { ProjectSchema, type PreflightResult } from "@clearcut/contracts";
 import { describe, expect, test, vi } from "vitest";
 
-import { IntakeForm } from "@/app/(product)/projects/new/intake-form";
+import { NewScanDialog } from "./new-scan-dialog";
 import type { UploadClient } from "./upload-client";
 
 function result(file: File, accepted: boolean): PreflightResult {
@@ -28,7 +28,7 @@ describe("new scan intake", () => {
     };
     const user = userEvent.setup();
     window.history.replaceState(null, "", "/projects/new");
-    render(<IntakeForm client={client} />);
+    render(<NewScanDialog client={client} defaultOpen />);
 
     await user.click(screen.getByRole("button", { name: "Run real sample" }));
 
@@ -42,7 +42,7 @@ describe("new scan intake", () => {
       createSampleProject: vi.fn(),
     };
     const user = userEvent.setup();
-    render(<IntakeForm client={client} />);
+    render(<NewScanDialog client={client} defaultOpen />);
 
     await user.upload(screen.getByLabelText("Screenplay file"), new File(["screenplay"], "draft.pdf", { type: "application/pdf" }));
     await user.upload(screen.getByLabelText("Rough cut file"), new File(["video"], "cut.mp4", { type: "video/mp4" }));

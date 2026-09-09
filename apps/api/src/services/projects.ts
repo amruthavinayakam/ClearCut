@@ -137,6 +137,51 @@ export function createProjectRecord(input: {
   });
 }
 
+export async function renameProject(dependencies: ApiDependencies, project: Project, title: string): Promise<Project> {
+  const timestamp = now();
+  const event: AuditEvent = {
+    id: `evt_${crypto.randomUUID()}`,
+    at: timestamp,
+    actor: "coordinator",
+    actor_name: "",
+    action: "project_renamed",
+    from_status: null,
+    to_status: null,
+    // The previous title is kept in the trail: a packet exported earlier
+    // carries the old name, and the history has to explain that.
+    rationale: `Production renamed from "${project.title}" to "${title}".`,
+    source_version: project.cut?.label ?? project.script?.label ?? "",
+    detail: { previous_title: project.title },
+  };
+  return dependencies.repository.save(withSummary({
+    ...project,
+    title,
+    updated_at: timestamp,
+    audit_events: [...project.audit_events, event],
+  }));
+}
+
+/**
+ * Deletes the record and the media it owns.
+ *
+ * Assets outlive the project otherwise: they sit in object storage keyed by a
+ * project that no longer exists, invisible and unbillable to anything.
+ */
+export async function deleteProject(dependencies: ApiDependencies, project: Project): Promise<void> {
+  const keys = [
+    project.script?.storage_key,
+    project.cut?.storage_key,
+    ...project.revisions?.flatMap((revision) => [revision.script?.storage_key, revision.cut?.storage_key]) ?? [],
+    ...project.items.flatMap((item) => item.documents.map((document) => document.storage_key)),
+  ].filter((key): key is string => Boolean(key));
+
+  for (const key of new Set(keys)) {
+    // One unreachable asset must not strand the record it belongs to.
+    await dependencies.assetStore.delete(key).catch(() => undefined);
+  }
+  await dependencies.repository.remove(project.id);
+}
+
 export async function setArchived(dependencies: ApiDependencies, project: Project, archived: boolean): Promise<Project> {
   const timestamp = now();
   const action = archived ? "project_archived" : "project_restored";

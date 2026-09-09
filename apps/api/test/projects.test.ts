@@ -132,4 +132,41 @@ describe("project lifecycle", () => {
     expect(accepted.status).toBe(201);
     expect((await repository.require(projectId)).script?.storage_key).toBe(stored.key);
   });
+
+  test("rename records the previous title, and delete removes the record and its media", async () => {
+    const { app, repository, assetStore } = await createTestApi();
+    const project = ProjectSchema.parse(fixture);
+    await repository.save(project);
+
+    const renamed = await app.request(`/api/projects/${project.id}`, {
+      method: "PATCH",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ title: "Night Drive (Director's Cut)" }),
+    });
+    expect(renamed.status).toBe(200);
+    const stored = await repository.require(project.id);
+    expect(stored.title).toBe("Night Drive (Director's Cut)");
+    // The old title has to survive: packets exported earlier carry it.
+    const event = stored.audit_events.find((entry) => entry.action === "project_renamed");
+    expect(event?.detail.previous_title).toBe("Night Drive");
+
+    const removed = await app.request(`/api/projects/${project.id}`, { method: "DELETE" });
+    expect(removed.status).toBe(204);
+    expect(await repository.get(project.id)).toBeNull();
+    // Media must not outlive the record that pointed at it.
+    if (project.script) {
+      await expect(assetStore.stat(project.script.storage_key)).rejects.toThrow();
+    }
+  });
+
+  test("a patch with neither field is rejected", async () => {
+    const { app, repository } = await createTestApi();
+    await repository.save(ProjectSchema.parse(fixture));
+    const response = await app.request("/api/projects/proj_fixture", {
+      method: "PATCH",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({}),
+    });
+    expect(response.status).toBe(422);
+  });
 });

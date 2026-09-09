@@ -63,6 +63,10 @@ export class FirestoreProjectRepository implements ProjectRepository {
     return structuredClone(parsed);
   }
 
+  async remove(id: string): Promise<void> {
+    await this.#firestore.collection(this.#collection).doc(id).delete();
+  }
+
   /** A record written by an older shape should not take down the whole listing. */
   #parse(raw: unknown): Project | null {
     if (typeof raw !== "string") return null;

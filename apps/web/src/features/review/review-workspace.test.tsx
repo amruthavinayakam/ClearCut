@@ -42,7 +42,9 @@ describe("review workspace", () => {
     render(<ReviewWorkspace initialCaseId={watched.id} project={project} />);
 
     expect(screen.getByRole("button", { name: "Monitor active" })).toBeDisabled();
-    await user.click(screen.getByRole("button", { name: /Fixture scoremusic/ }));
+    // The rail row is identified by the case name; the category now reads from
+    // an icon rather than a caption beneath the title.
+    await user.click(screen.getByRole("button", { name: /Fixture score/, pressed: false }));
 
     expect(screen.getByRole("button", { name: "Watch for changes" })).toBeEnabled();
   });

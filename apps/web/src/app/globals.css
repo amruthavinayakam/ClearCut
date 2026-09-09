@@ -180,10 +180,77 @@ select {
 .risk-dot--gray,
 .risk-fill--gray { background: var(--muted-foreground); }
 
+/* Category tiles: the icon carries the risk colour, on a wash of the same hue
+   so the tile reads as tinted rather than as a saturated chip. */
+.risk-tint--red { color: var(--risk-red); background: color-mix(in oklch, var(--risk-red) 12%, transparent); }
+.risk-tint--amber { color: var(--risk-amber); background: color-mix(in oklch, var(--risk-amber) 14%, transparent); }
+.risk-tint--blue { color: var(--primary); background: color-mix(in oklch, var(--primary) 12%, transparent); }
+.risk-tint--green { color: var(--risk-green); background: color-mix(in oklch, var(--risk-green) 12%, transparent); }
+.risk-tint--gray { color: var(--muted-foreground); background: color-mix(in oklch, var(--muted-foreground) 12%, transparent); }
+
 .risk-badge--red { color: var(--risk-red); border-color: color-mix(in oklch, var(--risk-red) 35%, var(--border)); }
 .risk-badge--amber { color: var(--risk-amber); border-color: color-mix(in oklch, var(--risk-amber) 35%, var(--border)); }
 .risk-badge--blue { color: var(--primary); border-color: color-mix(in oklch, var(--primary) 35%, var(--border)); }
 .risk-badge--green { color: var(--risk-green); border-color: color-mix(in oklch, var(--risk-green) 35%, var(--border)); }
+
+/* Printing the packet.
+   Export is a PDF, produced by the browser's own print pipeline so the text
+   stays selectable and searchable. Everything except the sheets is hidden, and
+   the page box matches the sheet exactly, so the PDF is what the preview shows
+   rather than a re-flowed approximation of it. */
+@media print {
+  @page {
+    size: letter;
+    margin: 0;
+  }
+
+  html,
+  body {
+    background: #fff;
+  }
+
+  /* Hide the surrounding app by visibility rather than display: the sheets are
+     descendants of that chrome, so removing the ancestors would remove them
+     too. visibility:hidden leaves the boxes in flow but unpainted, and the
+     subtree can opt back in. */
+  body * {
+    visibility: hidden;
+    box-shadow: none !important;
+  }
+
+  .packet-pages,
+  .packet-pages * {
+    visibility: visible;
+  }
+
+  /* Lift the sheets out of the hidden layout so they start at the page origin
+     instead of wherever the chrome had placed them. */
+  .packet-pages {
+    position: absolute;
+    top: 0;
+    left: 0;
+    display: block !important;
+    gap: 0 !important;
+  }
+
+  .packet-viewport {
+    overflow: visible !important;
+    padding: 0 !important;
+    border: 0 !important;
+    background: #fff !important;
+  }
+
+  .packet-page {
+    box-shadow: none !important;
+    break-after: page;
+    page-break-after: always;
+  }
+
+  .packet-page:last-child {
+    break-after: auto;
+    page-break-after: auto;
+  }
+}
 
 @media (prefers-reduced-motion: reduce) {
   *,

@@ -1,7 +1,7 @@
 "use client";
 
 import type { ProjectListItem } from "@clearcut/contracts";
-import { Archive, ArrowUpRight, Search } from "lucide-react";
+import { Archive, ArrowUpRight, Clapperboard, FileText, Search } from "lucide-react";
 import Link from "next/link";
 import { useMemo, useState } from "react";
 
@@ -22,11 +22,19 @@ function relativeDate(value: string) {
   return `${days}d ago`;
 }
 
-function stateTone(state: ProjectListItem["state_label"]) {
-  if (state === "Failed" || state === "Reopened") return "text-risk-red";
-  if (state === "Needs review") return "text-risk-amber";
-  if (state === "Documented") return "text-risk-green";
-  return "text-foreground";
+/**
+ * Workflow state as a chip.
+ *
+ * It was coloured body text, which reads as prose that happens to be orange
+ * rather than as a status you can scan down the column. The tints reuse the
+ * risk palette so a state means the same thing here as it does in a case.
+ */
+function stateChip(state: ProjectListItem["state_label"]) {
+  if (state === "Failed" || state === "Reopened") return "risk-tint--red";
+  if (state === "Needs review") return "risk-tint--amber";
+  if (state === "Documented") return "risk-tint--green";
+  if (state === "Ready for counsel") return "risk-tint--blue";
+  return "risk-tint--gray";
 }
 
 export function ProductionLibrary({ projects, archived }: { projects: ProjectListItem[]; archived: boolean }) {
@@ -39,8 +47,8 @@ export function ProductionLibrary({ projects, archived }: { projects: ProjectLis
   }), [projects, query, state]);
 
   return (
-    <section aria-label="Production library" className="border-y border-border">
-      <div className="flex flex-col gap-2 border-b border-border p-3 sm:flex-row sm:items-center">
+    <section aria-label="Production library" className="border-b border-border">
+      <div className="flex flex-col gap-2 border-b border-border px-4 py-3 sm:flex-row sm:items-center sm:px-6 lg:px-8">
         <div className="relative min-w-0 flex-1 sm:max-w-[320px]">
           <Search aria-hidden="true" className="absolute left-2.5 top-1/2 size-3.5 -translate-y-1/2 text-muted-foreground" />
           <Input aria-label="Search productions" className="h-8 pl-8" onChange={(event) => setQuery(event.target.value)} placeholder="Search productions" value={query} />
@@ -59,7 +67,7 @@ export function ProductionLibrary({ projects, archived }: { projects: ProjectLis
         <span className="ml-auto font-mono text-[10px] tracking-[0.06em] text-muted-foreground">{visible.length.toString().padStart(2, "0")} RECORDS</span>
       </div>
 
-      <div className="overflow-x-auto">
+      <div className="overflow-x-auto [&_td:first-child]:pl-4 [&_td:last-child]:pr-4 [&_th:first-child]:pl-4 [&_th:last-child]:pr-4 sm:[&_td:first-child]:pl-6 sm:[&_td:last-child]:pr-6 sm:[&_th:first-child]:pl-6 sm:[&_th:last-child]:pr-6 lg:[&_td:first-child]:pl-8 lg:[&_td:last-child]:pr-8 lg:[&_th:first-child]:pl-8 lg:[&_th:last-child]:pr-8">
         <Table>
           <TableHeader>
             <TableRow className="hover:bg-transparent">
@@ -73,21 +81,34 @@ export function ProductionLibrary({ projects, archived }: { projects: ProjectLis
           </TableHeader>
           <TableBody>
             {visible.map((project) => (
-              <TableRow className="group h-14" key={project.id}>
+              <TableRow className="group h-12" key={project.id}>
                 <TableCell>
                   <Link className="font-medium tracking-[-0.01em] hover:underline hover:underline-offset-4" href={`/projects/${project.id}`}>{project.title}</Link>
-                  <div className="mt-0.5 font-mono text-[10px] text-muted-foreground">{project.id.slice(0, 18)}</div>
                 </TableCell>
                 <TableCell>
-                  <span className={cn("text-xs", stateTone(project.state_label))}>{project.state_label}</span>
-                  <div className="mt-0.5 text-[11px] text-muted-foreground">{phaseLabel(project.phase)}</div>
-                </TableCell>
-                <TableCell className="text-xs text-muted-foreground">
-                  {[project.script_label && "SCRIPT", project.cut_label && "CUT"].filter(Boolean).join(" + ") || "—"}
+                  {/* One chip, not a chip over a caption. While a scan is
+                      running the phase is the live fact; once it is ready the
+                      workflow state is, and showing both stacked made every
+                      row two lines tall for no extra information. */}
+                  {project.phase === "ready"
+                    ? <Badge className={cn("border-transparent", stateChip(project.state_label))}>{project.state_label}</Badge>
+                    : <Badge className="risk-tint--blue border-transparent">{phaseLabel(project.phase)}</Badge>}
                 </TableCell>
                 <TableCell>
-                  <span className="text-xs">{project.unresolved_count} unresolved</span>
-                  <div className="mt-0.5 text-[11px] text-muted-foreground">{project.total_items} total cases</div>
+                  {/* One chip per source, so a script-only production is
+                      distinguishable at a glance from one that has picture. */}
+                  <div className="flex flex-wrap items-center gap-1">
+                    {project.script_label && <Badge variant="outline"><FileText />Script</Badge>}
+                    {project.cut_label && <Badge variant="outline"><Clapperboard />Cut</Badge>}
+                    {!project.script_label && !project.cut_label && <span className="text-xs text-muted-foreground">—</span>}
+                  </div>
+                </TableCell>
+                <TableCell>
+                  <Badge className={cn("tabular-nums border-transparent", project.unresolved_count > 0 ? "risk-tint--amber" : "risk-tint--green")}>
+                    {project.unresolved_count > 0
+                      ? `${project.unresolved_count} of ${project.total_items} open`
+                      : `${project.total_items} resolved`}
+                  </Badge>
                 </TableCell>
                 <TableCell className="text-right font-mono text-[10px] text-muted-foreground">{relativeDate(project.updated_at)}</TableCell>
                 <TableCell><Link aria-label={`Open ${project.title}`} className="text-muted-foreground opacity-0 transition-opacity group-hover:opacity-100 group-focus-within:opacity-100" href={`/projects/${project.id}`}><ArrowUpRight className="size-4" /></Link></TableCell>

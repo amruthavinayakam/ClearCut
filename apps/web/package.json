@@ -30,6 +30,7 @@
     "react": "latest",
     "react-dom": "latest",
     "react-markdown": "^10.1.0",
+    "remark-gfm": "^4.0.1",
     "shadcn": "^4.19.0",
     "sonner": "latest",
     "tailwind-merge": "latest",

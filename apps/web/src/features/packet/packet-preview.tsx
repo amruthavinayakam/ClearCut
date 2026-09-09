@@ -1,27 +1,55 @@
 "use client";
 
 import type { Project } from "@clearcut/contracts";
-import { Download, FileWarning } from "lucide-react";
+import { ChevronLeft, Download, FileWarning } from "lucide-react";
+import Link from "next/link";
 import { useState } from "react";
 
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogMedia, AlertDialogTitle } from "@/components/ui/alert-dialog";
-import { Button } from "@/components/ui/button";
+import { Button, buttonVariants } from "@/components/ui/button";
 
-export interface PacketClient { exportPacket(projectId: string): Promise<void> }
+import { useProjectCrumb } from "@/app/(product)/_components/product-shell";
+
+import { PacketPages } from "./packet-pages";
+
+export interface PacketClient {
+  /** Records the export against the project and returns the server-built packet. */
+  recordExport(projectId: string): Promise<void>;
+  /** Renders the visible sheets to PDF. */
+  print(documentName: string): void;
+}
 
 const browserPacketClient: PacketClient = {
-  async exportPacket(projectId) {
+  async recordExport(projectId) {
     const response = await fetch(`/api/projects/${encodeURIComponent(projectId)}/packet-exports`, { method: "POST" });
     if (!response.ok) throw new Error("The packet could not be exported.");
-    const blob = await response.blob();
-    const url = URL.createObjectURL(blob);
-    const anchor = document.createElement("a");
-    anchor.href = url;
-    anchor.download = `clearance-packet-${projectId}.md`;
-    anchor.click();
-    URL.revokeObjectURL(url);
+    // The body is the audited markdown: the record of what was exported. The
+    // file the coordinator keeps is the PDF printed from these sheets.
+    await response.text();
+  },
+  print(documentName) {
+    // The browser's own print pipeline gives a vector PDF with selectable text,
+    // which a packet needs to be searchable and quotable. The document title
+    // becomes the suggested filename.
+    const previous = document.title;
+    document.title = documentName;
+    const restore = () => {
+      document.title = previous;
+      window.removeEventListener("afterprint", restore);
+    };
+    window.addEventListener("afterprint", restore);
+    window.print();
   },
 };
+
+function Stat({ label, value, tone }: { label: string; value: string | number; tone?: "warn" }) {
+  return (
+    <div className="flex flex-col">
+      <dt className="font-mono text-[9px] uppercase tracking-[0.08em] text-muted-foreground">{label}</dt>
+      <dd className={`mt-0.5 text-sm tabular-nums ${tone === "warn" ? "text-risk-amber" : ""}`}>{value}</dd>
+    </div>
+  );
+}
 
 export function PacketPreview({ project, initialMarkdown, client = browserPacketClient }: { project: Project; initialMarkdown: string; client?: PacketClient }) {
   const [open, setOpen] = useState(false);
@@ -29,12 +57,68 @@ export function PacketPreview({ project, initialMarkdown, client = browserPacket
   const [exported, setExported] = useState(false);
   const incomplete = project.items.filter((item) => !item.is_resolved).length;
   const missingDocuments = project.items.filter((item) => item.documents.length === 0).length;
-  const exportNow = async () => { setBusy(true); try { await client.exportPacket(project.id); setExported(true); setOpen(false); } finally { setBusy(false); } };
+  // Sequence, not the revision id: "1" is the number a coordinator refers to,
+  // "revision_8f7" is a truncated key that identifies nothing to a reader.
+  const revision = project.revisions?.find((entry) => entry.id === project.active_revision_id)?.sequence;
+  useProjectCrumb({ href: `/projects/${project.id}`, label: project.title });
+
+  const exportNow = async () => {
+    setBusy(true);
+    try {
+      // Record first: the audit event describes the packet as the server built
+      // it, so it must land even if the print dialog is dismissed.
+      await client.recordExport(project.id);
+      setExported(true);
+      setOpen(false);
+      client.print(`${project.title} clearance packet`);
+    } finally {
+      setBusy(false);
+    }
+  };
+
   return (
-    <div className="grid lg:grid-cols-[minmax(0,1fr)_300px]">
-      <article className="min-w-0 border-b border-border p-5 lg:border-b-0 lg:border-r lg:p-8"><pre className="whitespace-pre-wrap font-mono text-[11px] leading-6 text-foreground">{initialMarkdown}</pre></article>
-      <aside className="p-4"><p className="font-mono text-[9px] tracking-[0.08em] text-muted-foreground">PACKET READINESS</p><dl className="mt-4 divide-y divide-border border-y border-border text-xs"><div className="flex justify-between py-2.5"><dt className="text-muted-foreground">Incomplete cases</dt><dd className="font-mono">{incomplete}</dd></div><div className="flex justify-between py-2.5"><dt className="text-muted-foreground">Cases without records</dt><dd className="font-mono">{missingDocuments}</dd></div><div className="flex justify-between py-2.5"><dt className="text-muted-foreground">Current revision</dt><dd className="font-mono">{project.active_revision_id?.slice(0, 12) ?? "—"}</dd></div></dl><p className="mt-4 text-[11px] leading-5 text-muted-foreground">Export records the current server-built packet in the audit trail. It remains research for human legal review.</p><Button className="mt-5 w-full" onClick={() => setOpen(true)}><Download /> Confirm and export Markdown</Button>{exported && <p className="mt-3 text-xs text-risk-green">Export recorded</p>}</aside>
-      <AlertDialog onOpenChange={setOpen} open={open}><AlertDialogContent><AlertDialogHeader><AlertDialogMedia><FileWarning /></AlertDialogMedia><AlertDialogTitle>Export current packet?</AlertDialogTitle><AlertDialogDescription>This creates a download and appends one immutable export event to the project history. Incomplete research and scope gaps remain visible.</AlertDialogDescription></AlertDialogHeader><AlertDialogFooter><AlertDialogCancel>Cancel</AlertDialogCancel><AlertDialogAction disabled={busy} onClick={() => void exportNow()}>{busy ? "Exporting" : "Export and record"}</AlertDialogAction></AlertDialogFooter></AlertDialogContent></AlertDialog>
-    </div>
+    <main className="flex min-h-0 flex-1 flex-col">
+      <header className="flex flex-wrap items-center justify-between gap-x-8 gap-y-4 border-b border-border px-4 py-3.5 sm:px-6 lg:px-8">
+        <div className="flex min-w-0 items-center gap-3">
+          <Link aria-label="Back to project" className={buttonVariants({ size: "icon-sm", variant: "ghost" })} href={`/projects/${project.id}`}><ChevronLeft /></Link>
+          <div className="min-w-0">
+            <p className="font-mono text-[9px] uppercase tracking-[0.1em] text-muted-foreground">Current server record</p>
+            <h1 className="truncate text-base font-medium tracking-[-0.02em]">{project.title} clearance packet</h1>
+          </div>
+        </div>
+
+        {/* Readiness reads across the header rather than down a rail: three
+            numbers do not need a column, and the sheets want the width. */}
+        <div className="flex items-center gap-6">
+          <dl className="flex items-center gap-6">
+            <Stat label="Incomplete" tone={incomplete > 0 ? "warn" : undefined} value={incomplete} />
+            <Stat label="No records" tone={missingDocuments > 0 ? "warn" : undefined} value={missingDocuments} />
+            <Stat label="Revision" value={revision ?? "—"} />
+          </dl>
+          <div className="flex flex-col items-end">
+            <Button className="transition-[background-color,scale] active:scale-[0.96]" onClick={() => setOpen(true)}><Download /> Export PDF</Button>
+            {exported && <span className="mt-1 text-[10px] text-risk-green">Export recorded</span>}
+          </div>
+        </div>
+      </header>
+
+      <div className="packet-viewport min-h-0 flex-1 overflow-auto bg-muted/40 p-6">
+        <PacketPages markdown={initialMarkdown} title={project.title} />
+      </div>
+
+      <AlertDialog onOpenChange={setOpen} open={open}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogMedia><FileWarning /></AlertDialogMedia>
+            <AlertDialogTitle>Export current packet?</AlertDialogTitle>
+            <AlertDialogDescription>This appends one immutable export event to the project history and opens the print dialog so the packet can be saved as a PDF. Incomplete research and scope gaps remain visible in the document.</AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction disabled={busy} onClick={() => void exportNow()}>{busy ? "Exporting" : "Export and record"}</AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+    </main>
   );
 }
