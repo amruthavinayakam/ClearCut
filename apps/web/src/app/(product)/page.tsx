@@ -1,15 +1,14 @@
 import type { ProjectListItem } from "@clearcut/contracts";
-import { Plus } from "lucide-react";
-import Link from "next/link";
-
-import { buttonVariants } from "@/components/ui/button";
 import { listProjects } from "@/lib/api-client";
+
+import { NewScanDialog } from "@/features/uploads/new-scan-dialog";
 
 import { ProductionLibrary } from "./_components/production-library";
 
 export const dynamic = "force-dynamic";
 
-export default async function ProductionsPage() {
+export default async function ProductionsPage({ searchParams }: { searchParams: Promise<{ new?: string }> }) {
+  const { new: openIntake } = await searchParams;
   let projects: ProjectListItem[] = [];
   let unavailable = false;
   try {
@@ -26,7 +25,7 @@ export default async function ProductionsPage() {
           <h1 className="mt-2 text-xl font-medium tracking-[-0.025em]">Productions</h1>
           <p className="mt-2 text-sm text-muted-foreground">Active research, evidence review, and recorded rights work.</p>
         </div>
-        <Link className={buttonVariants()} href="/projects/new"><Plus /> New scan</Link>
+        <NewScanDialog defaultOpen={openIntake === "1"} />
       </header>
       {unavailable && <div className="border-b border-risk-red/25 bg-risk-red/5 px-4 py-3 text-xs text-risk-red sm:px-6 lg:px-8">The API is unavailable. Existing records were not changed; retry by reloading this page.</div>}
       <ProductionLibrary archived={false} projects={projects} />

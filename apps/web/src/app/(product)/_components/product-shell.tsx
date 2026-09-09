@@ -124,7 +124,7 @@ export function ProductShell({ children }: { children: React.ReactNode }) {
           <CommandEmpty>No command found.</CommandEmpty>
           <CommandGroup heading="Navigate">
             <CommandItem onSelect={() => { setCommandsOpen(false); router.push("/"); }}><FolderOpen /> Productions <CommandShortcut>G P</CommandShortcut></CommandItem>
-            <CommandItem onSelect={() => { setCommandsOpen(false); router.push("/projects/new"); }}><FileSearch /> New clearance scan <CommandShortcut>G N</CommandShortcut></CommandItem>
+            <CommandItem onSelect={() => { setCommandsOpen(false); router.push("/?new=1"); }}><FileSearch /> New clearance scan <CommandShortcut>G N</CommandShortcut></CommandItem>
           </CommandGroup>
           <CommandGroup heading="Workspace">
             <CommandItem disabled><Settings /> Settings</CommandItem>
