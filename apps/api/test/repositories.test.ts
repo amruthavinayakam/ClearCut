@@ -86,4 +86,37 @@ describe("project records outgrow a document", () => {
     expect(json.byteLength).toBeGreaterThan(FIRESTORE_DOCUMENT_LIMIT);
     expect(JSON.parse(gunzipSync(gzipSync(json)).toString("utf8")).id).toBe(project.id);
   });
+
+  test("concurrent saves of one production are serialised", async () => {
+    // The shape that failed a whole run in production: research saves the
+    // record after every case with dozens in flight, and the store verifies a
+    // write by re-reading the object, which a racing write changes underneath.
+    const writes: string[] = [];
+    let active = 0;
+    let overlapped = false;
+    const store = {
+      async put(input: ReadableStream<Uint8Array>, metadata: { key: string }) {
+        active += 1;
+        if (active > 1) overlapped = true;
+        await new Response(input).arrayBuffer();
+        await new Promise((resolve) => setTimeout(resolve, 5));
+        writes.push(metadata.key);
+        active -= 1;
+        return { key: metadata.key, filename: "", contentType: "", sizeBytes: 0, etag: "1" };
+      },
+    };
+
+    const chain = new Map<string, Promise<unknown>>();
+    const save = async (id: string) => {
+      const queued = (chain.get(id) ?? Promise.resolve()).catch(() => undefined)
+        .then(() => store.put(new Blob(["x"]).stream(), { key: `projects/${id}.json.gz` }));
+      chain.set(id, queued);
+      await queued;
+    };
+
+    await Promise.all(Array.from({ length: 8 }, () => save("proj_same")));
+
+    expect(overlapped).toBe(false);
+    expect(writes).toHaveLength(8);
+  });
 });
