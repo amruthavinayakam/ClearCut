@@ -59,9 +59,37 @@ async function pdfLines(bytes: Uint8Array): Promise<Array<{ text: string; page: 
     for (let pageNumber = 1; pageNumber <= document.numPages; pageNumber += 1) {
       const page = await document.getPage(pageNumber);
       const content = await page.getTextContent();
+      // A pdf.js text item is a *run*, not a line: one line of a screenplay is
+      // usually several runs, and the run that ends the line often carries an
+      // empty string. Treating each run as its own line broke "A railroad
+      // one-bedroom off Monmouth Street." into "A" and the rest, and discarding
+      // empty runs threw away the only end-of-line signal there was.
+      let current = "";
+      let baseline: number | null = null;
+      let runEnd: number | null = null;
+      const flush = () => {
+        if (current.trim()) lines.push({ text: current.trimEnd(), page: pageNumber });
+        current = "";
+        baseline = null;
+        runEnd = null;
+      };
       for (const item of content.items) {
-        if ("str" in item && item.str.trim()) lines.push({ text: item.str, page: pageNumber });
+        if (!("str" in item)) continue;
+        const x = item.transform[4] as number;
+        const y = item.transform[5] as number;
+        // A different baseline is a new line whatever the runs claim.
+        if (baseline !== null && Math.abs(y - baseline) > 1) flush();
+        // Runs are laid out by position, so a horizontal gap is a space that no
+        // run contains. Without this the joined runs read as "Arailroad".
+        if (current && runEnd !== null && x - runEnd > 1 && !/\s$/.test(current) && !/^\s/.test(item.str)) {
+          current += " ";
+        }
+        current += item.str;
+        baseline = y;
+        runEnd = x + (item.width as number);
+        if (item.hasEOL) flush();
       }
+      flush();
     }
     if (lines.length === 0) {
       throw new ScreenplayParseError("no_text_layer", "The screenplay PDF has no usable text layer.");

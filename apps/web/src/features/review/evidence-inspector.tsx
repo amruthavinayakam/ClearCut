@@ -41,14 +41,19 @@ export function EvidenceInspector({ projectId, item }: { projectId: string; item
       </div>
 
       <Tabs className="flex min-h-0 flex-1 flex-col" defaultValue="overview">
-        {/* Tabs sized to their labels and spaced evenly. Stretching four tabs to
-            equal thirds of the panel put "Overview" hard against the left edge
-            and pushed "Files" off the right. */}
-        <TabsList className="h-10 shrink-0 justify-start gap-1 border-b border-border px-3" variant="line">
-          <TabsTrigger className="flex-none px-2" value="overview">Overview</TabsTrigger>
-          <TabsTrigger className="flex-none px-2" value="sources">Sources</TabsTrigger>
-          <TabsTrigger className="flex-none px-2" value="route">Who to ask</TabsTrigger>
-          <TabsTrigger className="flex-none px-2" value="documents">Files</TabsTrigger>
+        {/* Sized to their labels, and the active rule sits *on* the list's own
+            border rather than floating above it — the primitive's default
+            offset is tuned for a shorter list and left a second, thicker line
+            hanging over the first. */}
+        <TabsList className="h-10 shrink-0 justify-start gap-5 border-b border-border px-4" variant="line">
+          {([
+            { value: "overview", label: "Overview" },
+            { value: "sources", label: "Sources" },
+            { value: "route", label: "Who to ask" },
+            { value: "documents", label: "Files" },
+          ] as const).map((tab) => (
+            <TabsTrigger className="flex-none px-0 after:bottom-[-1px]" key={tab.value} value={tab.value}>{tab.label}</TabsTrigger>
+          ))}
         </TabsList>
 
         <ScrollFade className="flex-1" viewportClassName="h-full xl:overflow-y-auto">
