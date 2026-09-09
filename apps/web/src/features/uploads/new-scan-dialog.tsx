@@ -1,6 +1,6 @@
 "use client";
 
-import { ArrowRight, Plus, ShieldCheck, Sparkles } from "lucide-react";
+import { ArrowRight, Plus, ShieldCheck } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
 
@@ -137,6 +137,21 @@ export function NewScanDialog({
                 </p>
               )}
 
+              {/* The sample is a way in when you have no files to hand, not a
+                  peer of the primary action. Two buttons of similar weight in
+                  the footer read as two ways to do the same thing. */}
+              <p className="text-[11px] leading-5 text-muted-foreground">
+                No sources to hand?{" "}
+                <button
+                  className="font-medium text-foreground underline decoration-border underline-offset-2 transition-colors hover:decoration-foreground disabled:opacity-50"
+                  disabled={busy}
+                  onClick={() => void runSample()}
+                  type="button"
+                >
+                  {sampleRunning ? "Preparing the sample production…" : "Run the bundled sample production"}
+                </button>
+              </p>
+
               <p className="flex items-center gap-1.5 text-[11px] text-muted-foreground">
                 <ShieldCheck className="size-3.5 shrink-0" />
                 <span className="truncate">Research support. A qualified human owns every clearance decision.</span>
@@ -144,17 +159,6 @@ export function NewScanDialog({
             </div>
 
             <DialogFooter>
-              {/* A real secondary button. It was ghost text with a trailing play
-                  glyph, which read as neither a button nor a link. */}
-              <Button
-                className="mr-auto transition-[background-color,scale] active:scale-[0.96]"
-                disabled={busy}
-                onClick={() => void runSample()}
-                type="button"
-                variant="outline"
-              >
-                <Sparkles /> {sampleRunning ? "Preparing sample" : "Run real sample"}
-              </Button>
               <Button
                 className="min-w-[172px] transition-[background-color,scale] active:scale-[0.96]"
                 disabled={!canSubmit}

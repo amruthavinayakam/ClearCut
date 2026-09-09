@@ -30,7 +30,7 @@ describe("new scan intake", () => {
     window.history.replaceState(null, "", "/projects/new");
     render(<NewScanDialog client={client} defaultOpen />);
 
-    await user.click(screen.getByRole("button", { name: "Run real sample" }));
+    await user.click(screen.getByRole("button", { name: "Run the bundled sample production" }));
 
     expect(window.location.pathname).toBe("/projects/proj_fixture");
   });

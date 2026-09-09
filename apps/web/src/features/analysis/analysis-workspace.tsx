@@ -1,8 +1,7 @@
 "use client";
 
 import type { Project, ProjectStreamEvent } from "@clearcut/contracts";
-import { ArrowRight, Check, Circle, CircleDashed, Radio, RefreshCw } from "lucide-react";
-import Link from "next/link";
+import { Check, Circle, CircleDashed, Radio, RefreshCw } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useEffect, useMemo, useRef, useState } from "react";
 
@@ -99,7 +98,6 @@ export function AnalysisWorkspace({
           <div className="flex items-center gap-2"><Badge variant="outline">ANALYSIS</Badge></div>
           <h1 className="mt-2 text-lg font-medium tracking-[-0.02em]">{project.title}</h1>
         </div>
-        {project.items.length > 0 && <Link className="inline-flex h-8 items-center gap-1.5 rounded-md bg-primary px-2.5 text-xs font-medium text-primary-foreground" href={`/projects/${project.id}?case=${project.items[0].id}`}>Review available cases <ArrowRight className="size-3.5" /></Link>}
       </header>
 
       <div className="grid min-h-[calc(100dvh-7rem)] grid-cols-1 lg:grid-cols-[240px_minmax(0,1fr)_280px]">
