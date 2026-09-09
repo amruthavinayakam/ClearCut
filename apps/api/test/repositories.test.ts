@@ -62,8 +62,8 @@ describe("filesystem asset store", () => {
   });
 });
 
-describe("firestore project blobs", () => {
-  test("a production too large for a Firestore document fits once compressed", async () => {
+describe("project records outgrow a document", () => {
+  test("a real production exceeds what a Firestore document can hold", async () => {
     const project = ProjectSchema.parse(fixture);
     // The shape that broke production: many cases, each carrying its sources.
     project.items = Array.from({ length: 80 }, (_, index) => ({
@@ -78,12 +78,12 @@ describe("firestore project blobs", () => {
     }));
 
     const json = Buffer.from(JSON.stringify(project), "utf8");
-    const compressed = gzipSync(json);
-    const FIRESTORE_LIMIT = 1_048_487;
+    const FIRESTORE_DOCUMENT_LIMIT = 1_048_487;
 
-    expect(json.byteLength).toBeGreaterThan(FIRESTORE_LIMIT);
-    expect(compressed.byteLength).toBeLessThan(FIRESTORE_LIMIT);
-    // And it round-trips: a blob that cannot be read back is no better.
-    expect(JSON.parse(gunzipSync(compressed).toString("utf8")).id).toBe(project.id);
+    // This is why the record is kept in the object store: it does not fit in a
+    // document, and compressing it only moves the ceiling rather than removing
+    // it. The blob still round-trips through gzip, which is how it is stored.
+    expect(json.byteLength).toBeGreaterThan(FIRESTORE_DOCUMENT_LIMIT);
+    expect(JSON.parse(gunzipSync(gzipSync(json)).toString("utf8")).id).toBe(project.id);
   });
 });
