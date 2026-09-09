@@ -1,8 +1,12 @@
 import { describe, expect, test } from "bun:test";
 
+import { ProjectSchema } from "@clearcut/contracts";
 import { FixtureGeminiClient, FixtureParallelClient } from "@clearcut/integrations";
 
+import fixture from "../../../fixtures/project-ready.json";
+
 import { ProjectOrchestrator } from "../src/pipeline/orchestrator";
+import { researchStage } from "../src/pipeline/research-stage";
 import { ProjectEventBus } from "../src/services/events";
 import { createTestApi } from "./test-app";
 
@@ -58,5 +62,30 @@ describe("analysis orchestration", () => {
       const calls = parallel.calls.filter((call) => call.itemId === item.id).map((call) => call.operation);
       expect(calls).toEqual(["search", "dossier"]);
     }
+  });
+
+  test("a case whose research never returns becomes a gap instead of blocking the run", async () => {
+    const { repository } = await createTestApi();
+    const project = ProjectSchema.parse(fixture);
+    project.items = [{ ...project.items[0], workflow_status: "detected", audit_events: [] }];
+    await repository.save(project);
+
+    // A dossier that never settles is the shape that held whole productions in
+    // "analysing" while every other case had already finished.
+    const parallel = new FixtureParallelClient();
+    parallel.buildDossier = () => new Promise<never>(() => {});
+    parallel.searchClearanceItem = async () => [];
+
+    await researchStage({
+      project,
+      repository,
+      parallel,
+      events: new ProjectEventBus(),
+      concurrency: 1,
+      caseTimeoutMs: 40,
+    });
+
+    expect(project.items[0].workflow_status).toBe("unresolved");
+    expect(project.items[0].research_error).toMatch(/time budget/i);
   });
 });
