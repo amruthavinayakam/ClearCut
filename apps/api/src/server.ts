@@ -67,6 +67,13 @@ const app = createApp({
   },
 });
 
+// A run cannot outlive the process that started it, so anything still in a
+// non-terminal phase was orphaned by the last shutdown — most often a redeploy.
+// Pick those up rather than leaving them analysing forever.
+queueMicrotask(() => void orchestrator.recoverInterrupted()
+  .then((count) => { if (count > 0) console.log(`Resumed ${count} interrupted production(s)`); })
+  .catch((error: unknown) => console.error("Could not resume interrupted productions", error)));
+
 const server = Bun.serve({
   hostname: config.host,
   port: config.port,

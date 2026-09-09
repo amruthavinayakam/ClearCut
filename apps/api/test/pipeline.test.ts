@@ -172,4 +172,61 @@ describe("analysis orchestration", () => {
     expect(item.sources.map((source) => source.url)).toEqual([retrieved.url]);
     expect(item.task_run_id).toMatch(/^gemini-synthesis:/);
   });
+
+  test("a production whose process died with its research finished is resumed, not re-run", async () => {
+    const { repository, assetStore } = await createTestApi();
+    const project = ProjectSchema.parse(fixture);
+    // Exactly the shape a redeploy leaves behind: every case settled and saved,
+    // but the phase never reached its terminal state.
+    project.phase = "researching";
+    project.items = project.items.map((item) => ({ ...item, workflow_status: "evidence_ready" as const }));
+    await repository.save(project);
+
+    const parallel = new FixtureParallelClient();
+    const orchestrator = new ProjectOrchestrator({
+      repository,
+      assetStore,
+      gemini: new FixtureGeminiClient(),
+      parallel,
+      events: new ProjectEventBus(),
+      researchConcurrency: 2,
+      researchDepth: "fast",
+      caseResearchTimeoutMs: null,
+    });
+
+    expect(await orchestrator.recoverInterrupted()).toBe(1);
+
+    const recovered = await repository.require(project.id);
+    expect(recovered.phase).toBe("ready");
+    // The evidence already gathered survives: nothing was researched again.
+    expect(parallel.calls).toEqual([]);
+    expect(recovered.items).toHaveLength(project.items.length);
+  });
+
+  test("a production interrupted mid-research finishes only the cases still owed one", async () => {
+    const { repository, assetStore } = await createTestApi();
+    const project = ProjectSchema.parse(fixture);
+    project.phase = "researching";
+    const [first] = project.items;
+    project.items = [
+      { ...first, id: "case_done", stable_item_id: "stable_done", workflow_status: "evidence_ready" },
+      { ...first, id: "case_owed", stable_item_id: "stable_owed", workflow_status: "detected", audit_events: [] },
+    ];
+    await repository.save(project);
+
+    const parallel = new FixtureParallelClient();
+    await new ProjectOrchestrator({
+      repository,
+      assetStore,
+      gemini: new FixtureGeminiClient(),
+      parallel,
+      events: new ProjectEventBus(),
+      researchConcurrency: 2,
+      researchDepth: "fast",
+      caseResearchTimeoutMs: null,
+    }).resume(project.id);
+
+    expect((await repository.require(project.id)).phase).toBe("ready");
+    expect(parallel.calls.map((call) => call.itemId)).toEqual(["case_owed"]);
+  });
 });

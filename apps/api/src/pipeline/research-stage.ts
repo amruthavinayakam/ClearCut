@@ -97,6 +97,8 @@ export async function researchStage(input: {
   gemini: GeminiClient;
   concurrency: number;
   depth: ResearchDepth;
+  /** Which cases to research. Defaults to all of them; a resumed run passes only the unsettled ones. */
+  indexes?: number[];
   /** Overridable so the deadline can be exercised without waiting for it. */
   caseTimeoutMs?: number;
 }): Promise<Project> {
@@ -111,7 +113,8 @@ export async function researchStage(input: {
     return { ...fields, run_id: `gemini-synthesis:${item.stable_item_id}`, basis: synthesisBasis(synthesis, sources) };
   };
 
-  await mapConcurrent(project.items.map((_, index) => index), input.concurrency, async (index) => {
+  const targets = input.indexes ?? project.items.map((_, index) => index);
+  await mapConcurrent(targets, input.concurrency, async (index) => {
     let item = project.items[index];
     if (!hasHumanDecision(item)) {
       item = applyDisposition(item, {
