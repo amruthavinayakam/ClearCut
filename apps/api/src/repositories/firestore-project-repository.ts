@@ -2,40 +2,45 @@ import { Firestore } from "@google-cloud/firestore";
 import { gunzipSync, gzipSync } from "node:zlib";
 import { ProjectSchema, type Project } from "@clearcut/contracts";
 
+import type { AssetStore } from "./asset-store";
 import { RepositoryError, type ProjectRepository } from "./project-repository";
 
 /**
  * Durable project records for the Cloud Run deployment.
  *
- * The whole project is stored as one blob rather than a mapped document.
- * Firestore rejects nested arrays, and a Project is full of them (items hold
- * sources, which hold basis entries, which hold citations); the D1 adapter takes
- * the same approach for the same reason. The columns alongside it exist only so
- * a listing does not have to parse every record.
+ * The record itself lives in the object store; Firestore holds only an index.
+ * A document there is capped at about a mebibyte, and a real production passes
+ * it — one with 73 cases and 557 citations measured 1,809,126 bytes — at which
+ * point every save is rejected with INVALID_ARGUMENT. Nobody ever sees that
+ * error: the run finishes, the terminal write fails, and the production sits in
+ * "analysing" for good. A clearance record grows with the evidence gathered for
+ * it, so any fixed ceiling in the low megabytes is the wrong shape for this
+ * data. Objects have no such limit.
  *
- * The blob is gzipped. Firestore caps a document at about a mebibyte, and the
- * JSON passes that on a real production: one with 73 cases and 557 citations
- * measured 1,809,126 bytes, 1.73x the limit, so *every* save was rejected with
- * INVALID_ARGUMENT. The reader never sees that error — the run finishes, the
- * final write fails, and the production sits in "analysing" for good. Gzipped,
- * that same record is 482,334 bytes, 0.46x the limit.
+ * Firestore still earns its place: listing productions needs them ordered by
+ * when they last changed, which an object store cannot answer without reading
+ * every record. So the index is queried and only the records it names are read.
  *
- * That is a reprieve rather than a fix: 3.8x compression on this data means a
- * production about twice the size of the largest one seen will hit the ceiling
- * again. The durable answer is to keep the blob in the bucket that already
- * holds the media and leave only the index in Firestore.
+ * The blob is gzipped — research text compresses about four to one, and this is
+ * on the path of every stage transition.
  */
 export class FirestoreProjectRepository implements ProjectRepository {
   readonly #firestore: Firestore;
   readonly #collection: string;
+  readonly #blobs: AssetStore | null;
 
-  constructor(options: { projectId: string; collection?: string; databaseId?: string }) {
+  constructor(options: { projectId: string; collection?: string; databaseId?: string; blobs?: AssetStore }) {
     this.#firestore = new Firestore({
       projectId: options.projectId,
       ...(options.databaseId ? { databaseId: options.databaseId } : {}),
       ignoreUndefinedProperties: true,
     });
     this.#collection = options.collection ?? "projects";
+    this.#blobs = options.blobs ?? null;
+  }
+
+  #key(id: string): string {
+    return `projects/${id}.json.gz`;
   }
 
   async list(options?: { includeArchived?: boolean }): Promise<Project[]> {
@@ -43,8 +48,7 @@ export class FirestoreProjectRepository implements ProjectRepository {
       .collection(this.#collection)
       .orderBy("updated_at", "desc")
       .get();
-    const projects = snapshot.docs
-      .map((doc) => this.#parse(doc.get("data")))
+    const projects = (await Promise.all(snapshot.docs.map((doc) => this.#load(doc.id, doc.get("data")))))
       .filter((project): project is Project => project !== null);
     return options?.includeArchived
       ? projects
@@ -53,7 +57,7 @@ export class FirestoreProjectRepository implements ProjectRepository {
 
   async get(id: string): Promise<Project | null> {
     const doc = await this.#firestore.collection(this.#collection).doc(id).get();
-    return doc.exists ? this.#parse(doc.get("data")) : null;
+    return doc.exists ? this.#load(id, doc.get("data")) : null;
   }
 
   async require(id: string): Promise<Project> {
@@ -64,28 +68,64 @@ export class FirestoreProjectRepository implements ProjectRepository {
 
   async save(project: Project): Promise<Project> {
     const parsed = ProjectSchema.parse(project);
-    await this.#firestore.collection(this.#collection).doc(parsed.id).set({
+    const blob = gzipSync(Buffer.from(JSON.stringify(parsed), "utf8"));
+    const index = {
       title: parsed.title,
       phase: parsed.phase,
       archived_at: parsed.archived_at,
       updated_at: parsed.updated_at,
       unresolved_count: parsed.items.filter((item) => !item.is_resolved).length,
       total_items: parsed.items.length,
-      data: gzipSync(Buffer.from(JSON.stringify(parsed), "utf8")),
-    });
+    };
+
+    if (this.#blobs) {
+      // The record first, then the index that points at it: an index entry
+      // naming a record that was never written is the one ordering that loses
+      // data rather than merely repeating work.
+      await this.#blobs.put(new Blob([blob as unknown as BlobPart]).stream(), {
+        key: this.#key(parsed.id),
+        filename: `${parsed.id}.json.gz`,
+        contentType: "application/gzip",
+        sizeBytes: blob.byteLength,
+      });
+      await this.#firestore.collection(this.#collection).doc(parsed.id).set(index);
+    } else {
+      await this.#firestore.collection(this.#collection).doc(parsed.id).set({ ...index, data: blob });
+    }
     return structuredClone(parsed);
   }
 
   async remove(id: string): Promise<void> {
     await this.#firestore.collection(this.#collection).doc(id).delete();
+    // A leftover object is harmless; a delete that fails on it is not a reason
+    // to leave the record listed.
+    await this.#blobs?.delete(this.#key(id)).catch(() => undefined);
   }
 
   /**
-   * A record written by an older shape should not take down the whole listing.
-   *
-   * Records written before the blob was compressed are still plain JSON
-   * strings, so both are read.
+   * Reads a record, preferring the object store and falling back to the
+   * document, so records written before the blob moved out still load.
    */
+  async #load(id: string, inline: unknown): Promise<Project | null> {
+    if (this.#blobs) {
+      const stored = await this.#readBlob(id);
+      if (stored) return stored;
+    }
+    return this.#parse(inline);
+  }
+
+  async #readBlob(id: string): Promise<Project | null> {
+    try {
+      const read = await this.#blobs!.read(this.#key(id));
+      const bytes = new Uint8Array(await new Response(read.body).arrayBuffer());
+      return this.#parse(bytes);
+    } catch {
+      // Not written yet, or written before the move. The caller falls back.
+      return null;
+    }
+  }
+
+  /** A record written by an older shape should not take down the whole listing. */
   #parse(raw: unknown): Project | null {
     let json: string;
     if (typeof raw === "string") json = raw;
