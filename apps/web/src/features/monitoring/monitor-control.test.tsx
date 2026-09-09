@@ -13,9 +13,9 @@ describe("Parallel Monitor control", () => {
     const user = userEvent.setup();
     render(<MonitorControl client={{ createMonitor }} item={ProjectSchema.parse(fixture).items[0]} projectId="proj_fixture" />);
 
-    await user.click(screen.getByRole("button", { name: "Watch for changes" }));
+    await user.click(screen.getByRole("button", { name: "Turn on" }));
 
-    expect(await screen.findByRole("button", { name: "Monitor active" })).toBeDisabled();
+    expect(await screen.findByRole("button", { name: "On" })).toBeDisabled();
     expect(createMonitor).toHaveBeenCalledTimes(1);
   });
 });
