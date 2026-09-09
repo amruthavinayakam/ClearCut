@@ -20,7 +20,7 @@ export default async function ProductionsPage() {
 
   return (
     <main className="min-h-dvh">
-      <header className="flex min-h-40 items-end justify-between gap-6 border-b border-border px-4 pb-5 sm:px-6 lg:px-8">
+      <header className="flex flex-wrap items-end justify-between gap-6 border-b border-border px-4 pb-6 pt-10 sm:px-6 lg:px-8">
         <div>
           <p className="font-mono text-[10px] tracking-[0.1em] text-muted-foreground">CLEARANCE OPERATIONS</p>
           <h1 className="mt-2 text-xl font-medium tracking-[-0.025em]">Productions</h1>
@@ -29,7 +29,7 @@ export default async function ProductionsPage() {
         <Link className={buttonVariants()} href="/projects/new"><Plus /> New scan</Link>
       </header>
       {unavailable && <div className="border-b border-risk-red/25 bg-risk-red/5 px-4 py-3 text-xs text-risk-red sm:px-6 lg:px-8">The API is unavailable. Existing records were not changed; retry by reloading this page.</div>}
-      <div className="py-6"><ProductionLibrary archived={false} projects={projects} /></div>
+      <ProductionLibrary archived={false} projects={projects} />
     </main>
   );
 }

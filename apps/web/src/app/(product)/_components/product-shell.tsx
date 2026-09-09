@@ -2,10 +2,10 @@
 
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
-import { Command, FileSearch, FolderOpen, HelpCircle, Plus, Settings } from "lucide-react";
-import { useEffect, useState } from "react";
+import { Command, FileSearch, FolderOpen, HelpCircle, Settings } from "lucide-react";
+import { createContext, useContext, useEffect, useState } from "react";
 
-import { Button, buttonVariants } from "@/components/ui/button";
+import { Button } from "@/components/ui/button";
 import {
   CommandDialog,
   CommandEmpty,
@@ -15,17 +15,54 @@ import {
   CommandList,
   CommandShortcut,
 } from "@/components/ui/command";
-import { cn } from "@/lib/utils";
 
-const navigation = [
-  { href: "/", label: "Productions", icon: FolderOpen },
-  { href: "/projects/new", label: "New scan", icon: Plus },
-];
+/**
+ * Application chrome: one bar, then the page.
+ *
+ * This was a 216px sidebar holding a single destination. A rail earns its width
+ * by making several places reachable at once; with one it was mostly empty
+ * space beside every screen, so the nav, the palette and the standing
+ * disclaimer moved into the bar and the content took the width back.
+ */
+
+type Crumb = { label: string; href?: string };
+
+/**
+ * Lets a project-scoped page name itself in the trail.
+ *
+ * The shell only knows the URL, and a project id is not a name. Pages that have
+ * loaded a production register its title here so the trail reads
+ * Productions / <title> / Packet rather than stopping at a dead end.
+ */
+const ProjectCrumbContext = createContext<(crumb: { label: string; href: string } | null) => void>(() => {});
+
+export function useProjectCrumb(crumb: { label: string; href: string } | null) {
+  const set = useContext(ProjectCrumbContext);
+  const label = crumb?.label;
+  const href = crumb?.href;
+  useEffect(() => {
+    set(label && href ? { label, href } : null);
+    return () => set(null);
+  }, [set, label, href]);
+}
+
+function buildTrail(pathname: string, project: { label: string; href: string } | null): Crumb[] {
+  const trail: Crumb[] = [{ label: "Productions", href: "/" }];
+  if (pathname === "/") return trail;
+  if (pathname === "/projects/new") return [...trail, { label: "New scan" }];
+  if (project) trail.push(project);
+  if (pathname.endsWith("/packet")) trail.push({ label: "Packet" });
+  else if (pathname.endsWith("/revisions/new")) trail.push({ label: "New version" });
+  else if (pathname.includes("/revisions/")) trail.push({ label: "Version" });
+  return trail;
+}
 
 export function ProductShell({ children }: { children: React.ReactNode }) {
   const pathname = usePathname() ?? "/";
   const router = useRouter();
   const [commandsOpen, setCommandsOpen] = useState(false);
+  const [projectCrumb, setProjectCrumb] = useState<{ label: string; href: string } | null>(null);
+  const crumbs = buildTrail(pathname, projectCrumb);
 
   useEffect(() => {
     const onKeyDown = (event: KeyboardEvent) => {
@@ -41,57 +78,47 @@ export function ProductShell({ children }: { children: React.ReactNode }) {
   }, []);
 
   return (
-    <div className="min-h-dvh bg-background text-foreground">
-      <aside className="fixed inset-y-0 left-0 z-30 hidden w-[216px] border-r border-border bg-sidebar lg:flex lg:flex-col">
-        <Link className="flex h-14 items-center gap-2 border-b border-border px-4" href="/">
+    <div className="flex min-h-dvh flex-col bg-background text-foreground">
+      <header className="sticky top-0 z-30 flex h-12 shrink-0 items-center gap-1 border-b border-border bg-background/85 px-4 backdrop-blur-sm sm:px-6 lg:px-8">
+        <Link className="flex shrink-0 items-center gap-2" href="/">
           <span aria-hidden="true" className="size-2 bg-primary" />
           <span className="text-sm font-medium tracking-[-0.02em]">ClearCut</span>
         </Link>
-        <nav aria-label="Primary" className="flex flex-1 flex-col gap-0.5 p-2">
-          {navigation.map((item) => {
-            const active = item.href === "/" ? pathname === "/" : pathname.startsWith(item.href);
-            const Icon = item.icon;
-            return (
-              <Link
-                aria-current={active ? "page" : undefined}
-                className={cn(
-                  "flex h-8 items-center gap-2 rounded-md px-2 text-[13px] text-muted-foreground transition-colors hover:bg-sidebar-accent hover:text-foreground",
-                  active && "bg-sidebar-accent text-foreground",
-                )}
-                href={item.href}
-                key={item.href}
-              >
-                <Icon className="size-3.5" strokeWidth={1.7} />
-                {item.label}
-              </Link>
-            );
-          })}
-        </nav>
-        <div className="border-t border-border p-2">
-          <Button className="w-full justify-start text-muted-foreground" onClick={() => setCommandsOpen(true)} variant="ghost">
-            <Command className="size-3.5" />
-            Commands
-            <span className="ml-auto font-mono text-[9px] text-muted-foreground">⌘K</span>
-          </Button>
-          <div className="mt-2 border-t border-border px-2 pt-3">
-            <p className="font-mono text-[9px] tracking-[0.08em] text-muted-foreground">HUMAN REVIEW REQUIRED</p>
-            <p className="mt-1 text-[11px] leading-4 text-muted-foreground">Research support, not legal advice.</p>
-          </div>
-        </div>
-      </aside>
 
-      <header className="sticky top-0 z-20 flex h-12 items-center justify-between border-b border-border bg-background px-4 lg:hidden">
-        <Link className="flex items-center gap-2 text-sm font-medium" href="/">
-          <span aria-hidden="true" className="size-2 bg-primary" />
-          ClearCut
-        </Link>
-        <div className="flex items-center gap-1">
-          <Link aria-label="Open productions" className={buttonVariants({ size: "icon-sm", variant: "ghost" })} href="/"><FolderOpen /></Link>
-          <Link aria-label="Start new scan" className={buttonVariants({ size: "icon-sm" })} href="/projects/new"><Plus /></Link>
+        <nav aria-label="Breadcrumb" className="flex min-w-0 items-center gap-1.5 text-[13px]">
+          {crumbs.map((crumb, index) => (
+            <span className="flex min-w-0 items-center gap-1.5" key={crumb.label}>
+              <span aria-hidden="true" className="text-border">/</span>
+              {crumb.href && index < crumbs.length - 1 ? (
+                <Link className="truncate text-muted-foreground transition-colors hover:text-foreground" href={crumb.href}>{crumb.label}</Link>
+              ) : (
+                <span aria-current="page" className="truncate">{crumb.label}</span>
+              )}
+            </span>
+          ))}
+        </nav>
+
+        <div className="ml-auto flex items-center gap-1.5">
+          {/* The standing boundary on the product, not a page-level note. */}
+          <span className="hidden font-mono text-[9px] tracking-[0.08em] text-muted-foreground md:inline">
+            RESEARCH SUPPORT · NOT LEGAL ADVICE
+          </span>
+          <Button
+            className="h-8 gap-1.5 text-muted-foreground"
+            onClick={() => setCommandsOpen(true)}
+            size="sm"
+            variant="ghost"
+          >
+            <Command className="size-3.5" />
+            <span className="hidden sm:inline">Commands</span>
+            <kbd className="font-mono text-[9px] text-muted-foreground">⌘K</kbd>
+          </Button>
         </div>
       </header>
 
-      <div className="lg:pl-[216px]">{children}</div>
+      <ProjectCrumbContext.Provider value={setProjectCrumb}>
+        <div className="flex min-h-0 flex-1 flex-col">{children}</div>
+      </ProjectCrumbContext.Provider>
 
       <CommandDialog onOpenChange={setCommandsOpen} open={commandsOpen}>
         <CommandInput placeholder="Search commands…" />

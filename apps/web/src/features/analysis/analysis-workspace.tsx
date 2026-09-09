@@ -83,7 +83,7 @@ export function AnalysisWorkspace({
     <main className="min-h-dvh">
       <header className="flex min-h-28 items-end justify-between gap-4 border-b border-border px-4 pb-4 sm:px-6 lg:px-8">
         <div>
-          <div className="flex items-center gap-2"><span className="font-mono text-[10px] tracking-[0.09em] text-muted-foreground">{project.id}</span><Badge variant="outline">ANALYSIS</Badge></div>
+          <div className="flex items-center gap-2"><Badge variant="outline">ANALYSIS</Badge></div>
           <h1 className="mt-2 text-lg font-medium tracking-[-0.02em]">{project.title}</h1>
         </div>
         {project.items.length > 0 && <Link className="inline-flex h-8 items-center gap-1.5 rounded-md bg-primary px-2.5 text-xs font-medium text-primary-foreground" href={`/projects/${project.id}?case=${project.items[0].id}`}>Review available cases <ArrowRight className="size-3.5" /></Link>}

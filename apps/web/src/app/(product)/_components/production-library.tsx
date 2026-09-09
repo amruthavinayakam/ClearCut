@@ -39,8 +39,8 @@ export function ProductionLibrary({ projects, archived }: { projects: ProjectLis
   }), [projects, query, state]);
 
   return (
-    <section aria-label="Production library" className="border-y border-border">
-      <div className="flex flex-col gap-2 border-b border-border p-3 sm:flex-row sm:items-center">
+    <section aria-label="Production library" className="border-b border-border">
+      <div className="flex flex-col gap-2 border-b border-border px-4 py-3 sm:flex-row sm:items-center sm:px-6 lg:px-8">
         <div className="relative min-w-0 flex-1 sm:max-w-[320px]">
           <Search aria-hidden="true" className="absolute left-2.5 top-1/2 size-3.5 -translate-y-1/2 text-muted-foreground" />
           <Input aria-label="Search productions" className="h-8 pl-8" onChange={(event) => setQuery(event.target.value)} placeholder="Search productions" value={query} />
@@ -59,7 +59,7 @@ export function ProductionLibrary({ projects, archived }: { projects: ProjectLis
         <span className="ml-auto font-mono text-[10px] tracking-[0.06em] text-muted-foreground">{visible.length.toString().padStart(2, "0")} RECORDS</span>
       </div>
 
-      <div className="overflow-x-auto">
+      <div className="overflow-x-auto [&_td:first-child]:pl-4 [&_td:last-child]:pr-4 [&_th:first-child]:pl-4 [&_th:last-child]:pr-4 sm:[&_td:first-child]:pl-6 sm:[&_td:last-child]:pr-6 sm:[&_th:first-child]:pl-6 sm:[&_th:last-child]:pr-6 lg:[&_td:first-child]:pl-8 lg:[&_td:last-child]:pr-8 lg:[&_th:first-child]:pl-8 lg:[&_th:last-child]:pr-8">
         <Table>
           <TableHeader>
             <TableRow className="hover:bg-transparent">
@@ -76,7 +76,6 @@ export function ProductionLibrary({ projects, archived }: { projects: ProjectLis
               <TableRow className="group h-14" key={project.id}>
                 <TableCell>
                   <Link className="font-medium tracking-[-0.01em] hover:underline hover:underline-offset-4" href={`/projects/${project.id}`}>{project.title}</Link>
-                  <div className="mt-0.5 font-mono text-[10px] text-muted-foreground">{project.id.slice(0, 18)}</div>
                 </TableCell>
                 <TableCell>
                   <span className={cn("text-xs", stateTone(project.state_label))}>{project.state_label}</span>

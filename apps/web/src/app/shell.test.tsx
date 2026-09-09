@@ -1,4 +1,4 @@
-import { render, screen } from "@testing-library/react";
+import { render, screen, within } from "@testing-library/react";
 import { describe, expect, test } from "vitest";
 
 import { BootScreen, failed, ready } from "./(product)/_components/boot-screen";
@@ -14,14 +14,19 @@ describe("product boot", () => {
 });
 
 describe("product shell", () => {
-  test("exposes the primary product navigation", () => {
+  test("locates the reader with a breadcrumb trail", () => {
     render(
       <ProductShell>
         <div />
       </ProductShell>,
     );
 
-    expect(screen.getByRole("link", { name: "Productions" })).toBeVisible();
-    expect(screen.getByRole("link", { name: "New scan" })).toBeVisible();
+    // At the root, Productions is where you are, so it is the final crumb and
+    // deliberately not a link. "New scan" is the page's own action now, not
+    // shell chrome competing with each screen's primary button.
+    const trail = screen.getByRole("navigation", { name: "Breadcrumb" });
+    expect(within(trail).getByText("Productions")).toBeVisible();
+    expect(screen.getByRole("link", { name: "ClearCut" })).toBeVisible();
+    expect(screen.queryByRole("link", { name: "New scan" })).not.toBeInTheDocument();
   });
 });
