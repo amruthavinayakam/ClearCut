@@ -28,32 +28,24 @@ function CollapsibleTrigger({ className, ...props }: CollapsiblePrimitive.Trigge
 }
 
 /**
- * The panel animates open and closed.
+ * The panel is not animated, deliberately.
  *
- * `height: auto` cannot be interpolated, so the collapse runs on `max-height`
- * between two pixel values: zero and the height Base UI measures for the
- * content and publishes as `--collapsible-panel-height`. Using the measured
- * value rather than a guessed ceiling means the motion neither clips long
- * content nor spends most of its duration animating empty space.
- *
- * Padding belongs on the content inside, never on the animated track.
+ * Animating it needs the panel kept mounted so there is a height to move from,
+ * and with the panel mounted inside a scrolling region that measures itself,
+ * toggling it reproducibly froze the renderer — twice, on a fresh page each
+ * time. The transition did not even run: `max-height` jumped from 0 to its full
+ * value inside one frame. A disclosure that opens instantly is a smaller cost
+ * than one that hangs the page, so this stays plain until the interaction
+ * between the panel's height and the scroll region's ResizeObserver is
+ * understood rather than guessed at.
  */
-function CollapsiblePanel({ className, children, ...props }: CollapsiblePrimitive.Panel.Props) {
+function CollapsiblePanel({ className, ...props }: CollapsiblePrimitive.Panel.Props) {
   return (
     <CollapsiblePrimitive.Panel
-      // Kept in the DOM while closed: a box that does not exist has no state to
-      // animate from, so the panel simply appeared at full size.
-      keepMounted
       data-slot="collapsible-panel"
-      className={cn(
-        "max-h-[var(--collapsible-panel-height)] overflow-hidden transition-[max-height,opacity] duration-200 ease-out-quint",
-        "data-closed:max-h-0 data-closed:opacity-0",
-        className
-      )}
+      className={cn(className)}
       {...props}
-    >
-      {children}
-    </CollapsiblePrimitive.Panel>
+    />
   )
 }
 

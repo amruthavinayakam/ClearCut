@@ -78,8 +78,8 @@ export function EvidenceInspector({ projectId, item }: { projectId: string; item
                 <ChevronRight className="size-3.5 text-muted-foreground transition-transform duration-200 ease-out-quint group-data-[panel-open]/collapsible:rotate-90" />
                 What the research found
               </CollapsibleTrigger>
-              <CollapsiblePanel>
-                <p className="px-3.5 pb-3.5 text-xs leading-5 text-pretty text-muted-foreground">{summary}</p>
+              <CollapsiblePanel className="px-3.5 pb-3.5 text-xs leading-5 text-pretty text-muted-foreground">
+                {summary}
               </CollapsiblePanel>
             </Collapsible>
 
