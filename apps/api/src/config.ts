@@ -12,6 +12,8 @@ export type ApiConfig = {
   geminiModel: string;
   googleCloudProject: string;
   googleCloudLocation: string;
+  firestoreCollection: string;
+  gcsBucket: string;
   parallelApiKey: string;
   parallelProcessor: string;
   parallelMonitorProcessor: string;
@@ -41,6 +43,11 @@ export function readConfig(env: Record<string, string | undefined> = process.env
     // own credentials instead of carrying an API key. Cloud Run supplies these.
     googleCloudProject: env.GOOGLE_CLOUD_PROJECT?.trim() ?? "",
     googleCloudLocation: env.GOOGLE_CLOUD_LOCATION?.trim() ?? "global",
+    // Durable storage for the Cloud Run deployment. Without these the API
+    // keeps projects in memory and media in /tmp, and every instance restart
+    // — including a redeploy — discards all of it.
+    firestoreCollection: env.FIRESTORE_COLLECTION?.trim() ?? "",
+    gcsBucket: env.GCS_BUCKET?.trim() ?? "",
     parallelApiKey: env.PARALLEL_API_KEY?.trim() ?? "",
     parallelProcessor: env.PARALLEL_PROCESSOR?.trim() ?? "core",
     parallelMonitorProcessor: env.PARALLEL_MONITOR_PROCESSOR?.trim() ?? "lite",

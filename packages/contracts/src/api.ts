@@ -44,9 +44,11 @@ export const AppConfigSchema = z.object({
   search_mode: z.string(),
   processor: z.string(),
   gcs_bucket: z.string().nullable().optional(),
-  asset_store: z.enum(["filesystem", "r2"]).default("filesystem"),
+  asset_store: z.enum(["filesystem", "gcs", "r2"]).default("filesystem"),
   webhooks_enabled: z.boolean(),
   sample_available: z.boolean(),
+  /** False means a restart discards every production. */
+  durable: z.boolean().default(false),
 }).strict();
 
 export const ProjectListSchema = z.object({
