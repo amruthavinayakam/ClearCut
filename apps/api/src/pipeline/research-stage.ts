@@ -1,12 +1,35 @@
 import type { ClearanceItem, EvidenceSource, Project } from "@clearcut/contracts";
 import { applyDisposition, hasHumanDecision } from "@clearcut/domain";
-import type { ParallelClient } from "@clearcut/integrations";
+import type { Dossier, DossierSynthesis, GeminiClient, ParallelClient } from "@clearcut/integrations";
 
 import type { ProjectRepository } from "../repositories/project-repository";
 import type { ProjectEventBus } from "../services/events";
 import { withSummary } from "../services/projects";
 
-function taskSources(item: ClearanceItem, basis: Awaited<ReturnType<ParallelClient["buildDossier"]>>["basis"]): EvidenceSource[] {
+/**
+ * How a case is researched.
+ *
+ * `fast` retrieves with Parallel Search and reasons over what came back with a
+ * Gemini agent. `deep` hands the whole case to a Parallel Task, which searches
+ * again on its own and returns a richer basis — measured between 100s and 250s
+ * per case against seconds for `fast`, with tails well beyond that.
+ */
+export type ResearchDepth = "fast" | "deep";
+
+/** Citations resolved from indexes back to the sources actually retrieved. */
+function synthesisBasis(synthesis: DossierSynthesis, sources: EvidenceSource[]): Dossier["basis"] {
+  return synthesis.basis.map((entry) => ({
+    field: entry.field,
+    reasoning: entry.reasoning,
+    confidence: entry.confidence,
+    citations: entry.source_indexes
+      .map((index) => sources[index])
+      .filter((source): source is EvidenceSource => Boolean(source))
+      .map((source) => ({ url: source.url, title: source.title, excerpts: [source.excerpt] })),
+  }));
+}
+
+function taskSources(item: ClearanceItem, basis: Dossier["basis"]): EvidenceSource[] {
   const known = new Set(item.sources.map((source) => source.url));
   const sources: EvidenceSource[] = [];
   for (const field of basis) {
@@ -48,7 +71,7 @@ async function mapConcurrent<T>(values: T[], limit: number, work: (value: T) => 
  * returned by now is an outlier, and an outlier should become a visible gap
  * rather than an open-ended wait.
  */
-const CASE_RESEARCH_TIMEOUT_MS = 5 * 60_000;
+const CASE_RESEARCH_TIMEOUT_MS: Record<ResearchDepth, number> = { fast: 90_000, deep: 5 * 60_000 };
 
 function withDeadline<T>(work: Promise<T>, milliseconds: number, message: string): Promise<T> {
   let timer: ReturnType<typeof setTimeout>;
@@ -65,12 +88,23 @@ export async function researchStage(input: {
   repository: ProjectRepository;
   parallel: ParallelClient;
   events: ProjectEventBus;
+  gemini: GeminiClient;
   concurrency: number;
+  depth: ResearchDepth;
   /** Overridable so the deadline can be exercised without waiting for it. */
   caseTimeoutMs?: number;
 }): Promise<Project> {
-  const { project, repository, parallel, events } = input;
-  const caseTimeout = input.caseTimeoutMs ?? CASE_RESEARCH_TIMEOUT_MS;
+  const { project, repository, parallel, gemini, events, depth } = input;
+  const caseTimeout = input.caseTimeoutMs ?? CASE_RESEARCH_TIMEOUT_MS[depth];
+
+  /** Retrieval always runs on Parallel; only the reasoning over it moves. */
+  const assemble = async (item: ClearanceItem, sources: EvidenceSource[]): Promise<Dossier> => {
+    if (depth === "deep") return parallel.buildDossier(item, project.title, sources);
+    const synthesis = await gemini.synthesizeDossier({ productionTitle: project.title, item, sources });
+    const { basis: _basis, ...fields } = synthesis;
+    return { ...fields, run_id: `gemini-synthesis:${item.stable_item_id}`, basis: synthesisBasis(synthesis, sources) };
+  };
+
   await mapConcurrent(project.items.map((_, index) => index), input.concurrency, async (index) => {
     let item = project.items[index];
     if (!hasHumanDecision(item)) {
@@ -102,7 +136,7 @@ export async function researchStage(input: {
 
     try {
       const dossier = await withDeadline(
-        parallel.buildDossier(item, project.title, sources),
+        assemble(item, item.sources),
         caseTimeout,
         "Structured research did not return within the time budget for this case.",
       );

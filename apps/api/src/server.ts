@@ -3,7 +3,7 @@ import { readConfig } from "./config";
 import { FilesystemAssetStore } from "./repositories/filesystem-asset-store";
 import { FirestoreProjectRepository } from "./repositories/firestore-project-repository";
 import { GcsAssetStore } from "./repositories/gcs-asset-store";
-import { MemoryProjectRepository } from "./repositories/memory-project-repository";
+import { FilesystemProjectRepository } from "./repositories/filesystem-project-repository";
 import { MemoryMonitorRepository } from "./repositories/memory-monitor-repository";
 import { ProjectEventBus } from "./services/events";
 import { FixtureGeminiClient, FixtureParallelClient, LiveGeminiClient, LiveParallelClient } from "@clearcut/integrations";
@@ -20,7 +20,9 @@ const repository = bindingClient
   ? new D1ProjectRepository(bindingClient)
   : config.firestoreCollection
     ? new FirestoreProjectRepository({ projectId: config.googleCloudProject, collection: config.firestoreCollection })
-    : new MemoryProjectRepository();
+    // Local runs still get durable storage: a dev-server restart is not a
+    // reason for a coordinator's productions to disappear.
+    : new FilesystemProjectRepository(config.projectStorageDir);
 const assetStore = bindingClient
   ? new R2AssetStore(bindingClient)
   : config.gcsBucket
@@ -54,7 +56,8 @@ const orchestrator = new ProjectOrchestrator({
   parallel,
   events,
   researchConcurrency: config.researchConcurrency,
-    caseResearchTimeoutMs: config.caseResearchTimeoutMs,
+  researchDepth: config.researchDepth,
+  caseResearchTimeoutMs: config.caseResearchTimeoutMs,
 });
 const app = createApp({
   config, repository, assetStore, monitors, events, gemini, parallel,

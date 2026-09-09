@@ -81,12 +81,14 @@ Fixture mode is explicit and every human-facing fixture value is prefixed `MOCK:
 | `GOOGLE_API_KEY` | — | Google AI Studio key for live Gemini analysis |
 | `GEMINI_MODEL` | `gemini-3.8-flash` | Gemini model used for structured multimodal output |
 | `PARALLEL_API_KEY` | — | Parallel Search, Task, and Monitor key |
-| `PARALLEL_PROCESSOR` | `base` | Structured Task processor. `lite` is faster still, `core` and `pro` research deeper and take considerably longer |
+| `PARALLEL_PROCESSOR` | `base` | Task processor, used when `RESEARCH_DEPTH=deep` |
 | `PARALLEL_MONITOR_PROCESSOR` | `lite` | Monitor processor |
 | `RESEARCH_CONCURRENCY` | `32` | Concurrent per-case research jobs |
-| `CASE_RESEARCH_TIMEOUT_MS` | `300000` | Cap on one case's research. The slowest case sets the production's total time |
+| `RESEARCH_DEPTH` | `fast` | `fast` reasons over Parallel Search results with a Gemini agent; `deep` sends each case to a Parallel Task |
+| `CASE_RESEARCH_TIMEOUT_MS` | per depth | Cap on one case's research. Unset means 90s in `fast`, 5min in `deep`. The slowest case sets the production's total time |
 | `MOCK_RESEARCH` | `false` | Use deterministic fixture integrations instead of live providers |
 | `ASSET_STORAGE_DIR` | `.clearcut/assets` | Local opaque asset store |
+| `PROJECT_STORAGE_DIR` | `.clearcut/projects` | Local project store, used when Firestore is not configured |
 | `FFPROBE_PATH` | `ffprobe` | Media probe binary |
 | `MAX_UPLOAD_BYTES` | `209715200` | API upload ceiling |
 | `PUBLIC_BASE_URL` | — | Public origin used for Parallel webhook delivery |

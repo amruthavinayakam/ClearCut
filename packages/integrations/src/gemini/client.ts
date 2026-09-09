@@ -19,6 +19,8 @@ import type { z } from "zod";
 import {
   CopilotAnswerSchema,
   CutScanResultSchema,
+  DossierSynthesisSchema,
+  type DossierSynthesisInput,
   ReconciliationResultSchema,
   ScriptScanResultSchema,
   type CutScanInput,
@@ -29,7 +31,7 @@ import {
   type ScriptScanInput,
   validateOutput,
 } from "../types";
-import { isVerifiedSample } from "../sample";
+import { isVerifiedSample, verifiedCase } from "../sample";
 
 const GEMINI_SYSTEM = `You are a film-production clearance research assistant. Detect potentially
 clearable elements and assemble evidence for human legal review. Never decide that an element is
@@ -50,6 +52,39 @@ const COPILOT_AGENT = {
   description: "Explains the stored clearance record to a coordinator.",
   instruction: "Answer the coordinator's question using only the evidence supplied. You cannot alter status or approve anything. If evidence is absent, say it is unknown.",
 } as const;
+
+/**
+ * The fast research path.
+ *
+ * Parallel Search retrieves; this agent reads what came back and writes the
+ * dossier. Splitting retrieval from reasoning is what makes it quick — the
+ * alternative asks a second provider-side agent to go and search all over
+ * again, which is thorough and takes minutes per case.
+ */
+const SYNTHESIS_AGENT = {
+  operation: "synthesize_dossier",
+  agentName: "rights_dossier_synthesist",
+  description: "Assembles a rights-clearance dossier from retrieved public sources.",
+  instruction: `Read the numbered sources and assemble the dossier for this element.
+Every claim must rest on a supplied source. Cite by its number in source_indexes; never write a URL.
+A rights holder you cannot support from these sources is an evidence gap, not a candidate.
+Prefer registries, official sites, and rights-society records over commentary.
+Do not conclude that anything is cleared, licensed, public domain, or fair use.`,
+} as const;
+
+function synthesisPrompt(input: DossierSynthesisInput): string {
+  const sources = input.sources.map((source, index) =>
+    `[${index}] ${source.title ?? source.url}\nURL: ${source.url}\n${source.excerpt.slice(0, 1_500)}`);
+  return [
+    `Production: ${input.productionTitle}`,
+    `Element: ${input.item.name}`,
+    `Category: ${input.item.category}`,
+    `Description: ${input.item.description}`,
+    `Provenance: ${input.item.provenance}`,
+    "",
+    sources.length > 0 ? `SOURCES:\n${sources.join("\n\n")}` : "SOURCES: none were retrieved.",
+  ].join("\n");
+}
 
 function projectContext(project: Project): string {
   return JSON.stringify({
@@ -98,6 +133,27 @@ export class FixtureGeminiClient implements GeminiClient {
         import.meta.url,
       ),
     ).json());
+  }
+
+  async synthesizeDossier(input: DossierSynthesisInput) {
+    if (isVerifiedSample(input.productionTitle)) {
+      const { dossier } = await verifiedCase(input.item.name);
+      const { source_keys: _sourceKeys, ...fields } = dossier;
+      return DossierSynthesisSchema.parse({
+        ...fields,
+        basis: [{
+          field: "public research",
+          reasoning: "Official source reviewed for the recorded candidate, route, and remaining evidence gap.",
+          confidence: dossier.overall_confidence,
+          source_indexes: input.sources.map((_, index) => index),
+        }],
+      });
+    }
+    // The shared fixture carries the Task run id; synthesis has no such id.
+    const { run_id: _runId, ...fixture } = await Bun.file(
+      new URL("../../../../fixtures/research/dossier.json", import.meta.url),
+    ).json();
+    return DossierSynthesisSchema.parse({ ...fixture, basis: [] });
   }
 
   async reconcile(input: ReconcileInput) {
@@ -380,6 +436,10 @@ export class LiveGeminiClient implements GeminiClient {
       JSON.stringify(input),
       ReconciliationResultSchema,
     );
+  }
+
+  synthesizeDossier(input: DossierSynthesisInput) {
+    return this.#structured(SYNTHESIS_AGENT, synthesisPrompt(input), DossierSynthesisSchema);
   }
 
   answerCopilot(input: { project: Project; question: string }) {

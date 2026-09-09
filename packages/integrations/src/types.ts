@@ -81,6 +81,24 @@ export const DossierSchema = z.object({
   }).strict()).default([]),
 }).strict();
 
+/**
+ * The dossier as the synthesis agent writes it.
+ *
+ * Citations are indexes into the sources handed to the agent, never URLs it
+ * writes itself: a model asked for a URL will produce a plausible one, and a
+ * fabricated citation in a clearance record is worse than a missing one. The
+ * caller maps each index back to the retrieved source, so every citation in a
+ * dossier is a document that was actually fetched.
+ */
+export const DossierSynthesisSchema = DossierSchema.omit({ run_id: true, basis: true }).extend({
+  basis: z.array(z.object({
+    field: z.string(),
+    reasoning: z.string(),
+    confidence: ConfidenceSchema.nullable(),
+    source_indexes: z.array(z.number().int().nonnegative()),
+  }).strict()).default([]),
+}).strict();
+
 export const CopilotAnswerSchema = z.object({
   answer: z.string(),
   citations: z.array(z.string().url()).default([]),
@@ -109,6 +127,12 @@ export type ReconcileInput = {
 
 export type CopilotInput = { project: Project; question: string };
 
+export type DossierSynthesisInput = {
+  productionTitle: string;
+  item: ClearanceItem;
+  sources: EvidenceSource[];
+};
+
 export interface GeminiClient {
   scanScreenplay(input: ScriptScanInput): Promise<z.infer<typeof ScriptScanResultSchema>>;
   scanCut(input: CutScanInput): Promise<z.infer<typeof CutScanResultSchema>>;
@@ -122,6 +146,14 @@ export interface GeminiClient {
    * markdown can. Citations come from the stored record once the text ends.
    */
   streamCopilot(input: CopilotInput): AsyncIterable<string>;
+  /**
+   * Assembles a dossier from sources already retrieved by Parallel Search.
+   *
+   * This is the fast research path: retrieval stays with Parallel, and the
+   * reasoning over what was retrieved runs on Gemini in seconds rather than
+   * waiting minutes for a second provider-side agent to search all over again.
+   */
+  synthesizeDossier(input: DossierSynthesisInput): Promise<z.infer<typeof DossierSynthesisSchema>>;
 }
 
 export interface ParallelClient {
@@ -152,6 +184,7 @@ export const IntegrationSchemas = {
 };
 
 export type Dossier = z.infer<typeof DossierSchema>;
+export type DossierSynthesis = z.infer<typeof DossierSynthesisSchema>;
 export type ScriptCandidate = z.infer<typeof ScriptCandidateSchema>;
 export type CutCandidate = z.infer<typeof CutCandidateSchema>;
 export type ReconciliationMatch = z.infer<typeof ReconciliationMatchSchema>;

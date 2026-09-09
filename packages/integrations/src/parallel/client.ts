@@ -18,35 +18,7 @@ import {
   type RequestFunction,
   validateOutput,
 } from "../types";
-import { isVerifiedSample } from "../sample";
-
-type VerifiedSource = {
-  url: string;
-  title: string;
-  excerpt: string;
-  publish_date: string | null;
-};
-
-type VerifiedCase = Omit<Dossier, "run_id" | "basis"> & {
-  source_keys: string[];
-};
-
-type VerifiedResearchCatalog = {
-  sources: Record<string, VerifiedSource>;
-  cases: Record<string, VerifiedCase>;
-};
-
-async function verifiedResearch(): Promise<VerifiedResearchCatalog> {
-  return Bun.file(new URL("../../../../fixtures/research/artemis/research.json", import.meta.url)).json();
-}
-
-async function verifiedCase(item: ClearanceItem) {
-  const catalog = await verifiedResearch();
-  const dossier = catalog.cases[item.name];
-  if (!dossier) throw new Error(`Verified sample research is missing for ${item.name}.`);
-  const sources = dossier.source_keys.map((key) => catalog.sources[key]).filter((source): source is VerifiedSource => Boolean(source));
-  return { dossier, sources };
-}
+import { isVerifiedSample, verifiedCase } from "../sample";
 
 function queries(item: ClearanceItem): string[] {
   const suffix: Record<string, string[]> = {
@@ -94,7 +66,7 @@ export class FixtureParallelClient implements ParallelClient {
   async searchClearanceItem(item: ClearanceItem, _productionTitle: string, _sessionId: string) {
     this.calls.push({ operation: "search", itemId: item.id });
     if (isVerifiedSample(_productionTitle)) {
-      const { sources } = await verifiedCase(item);
+      const { sources } = await verifiedCase(item.name);
       return sources.map((source) => EvidenceSourceSchema.parse({
         ...source,
         retrieved_at: new Date().toISOString(),
@@ -117,7 +89,7 @@ export class FixtureParallelClient implements ParallelClient {
   async buildDossier(item: ClearanceItem, _productionTitle: string, _sources: EvidenceSource[]) {
     this.calls.push({ operation: "dossier", itemId: item.id });
     if (isVerifiedSample(_productionTitle)) {
-      const { dossier, sources } = await verifiedCase(item);
+      const { dossier, sources } = await verifiedCase(item.name);
       const { source_keys: _sourceKeys, ...fields } = dossier;
       return DossierSchema.parse({
         ...fields,

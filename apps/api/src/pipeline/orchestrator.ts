@@ -8,6 +8,7 @@ import type { ProjectEventBus } from "../services/events";
 import { withSummary } from "../services/projects";
 import { cutStage } from "./cut-stage";
 import { reconcileStage } from "./reconcile-stage";
+import type { ResearchDepth } from "./research-stage";
 import { researchStage } from "./research-stage";
 import { screenplayStage } from "./screenplay-stage";
 
@@ -18,7 +19,8 @@ export type OrchestratorDependencies = {
   parallel: ParallelClient;
   events: ProjectEventBus;
   researchConcurrency: number;
-  caseResearchTimeoutMs: number;
+  researchDepth: ResearchDepth;
+  caseResearchTimeoutMs: number | null;
 };
 
 function activity(phase: string, message: string, detail: Record<string, unknown> = {}): ActivityEvent {
@@ -87,8 +89,10 @@ export class ProjectOrchestrator {
           repository: this.dependencies.repository,
           parallel: this.dependencies.parallel,
           events: this.dependencies.events,
+          gemini: this.dependencies.gemini,
           concurrency: this.dependencies.researchConcurrency,
-          caseTimeoutMs: this.dependencies.caseResearchTimeoutMs,
+          depth: this.dependencies.researchDepth,
+          caseTimeoutMs: this.dependencies.caseResearchTimeoutMs ?? undefined,
         });
       }
 
