@@ -33,6 +33,7 @@ describe("upload preflight", () => {
         maxUploadBytes: 4,
         mockResearch: true,
         researchConcurrency: 4,
+    caseResearchTimeoutMs: 300_000,
         googleApiKey: "",
         geminiModel: "gemini-3.8-flash",
         googleCloudProject: "",

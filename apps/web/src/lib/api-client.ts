@@ -17,6 +17,17 @@ function endpoint(path: string) {
   return `${serverOrigin}${path}`;
 }
 
+/**
+ * True when the API said the thing does not exist.
+ *
+ * The API names the resource in the code — project_not_found, item_not_found —
+ * so a check against the bare "not_found" matches only the router's own
+ * fallback. A page relying on that rendered a runtime error instead of a 404.
+ */
+export function isNotFound(error: unknown): boolean {
+  return error instanceof ApiClientError && /(^|_)not_found$/.test(error.code);
+}
+
 export class ApiClientError extends Error {
   constructor(
     message: string,

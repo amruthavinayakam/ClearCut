@@ -2,7 +2,7 @@ import { notFound } from "next/navigation";
 
 import { AnalysisWorkspace } from "@/features/analysis/analysis-workspace";
 import { ReviewWorkspace } from "@/features/review/review-workspace";
-import { ApiClientError, getProject } from "@/lib/api-client";
+import { getProject, isNotFound } from "@/lib/api-client";
 
 export const dynamic = "force-dynamic";
 
@@ -12,7 +12,7 @@ export default async function ProjectPage({ params, searchParams }: { params: Pr
   try {
     project = await getProject(projectId);
   } catch (error) {
-    if (error instanceof ApiClientError && error.code === "not_found") notFound();
+    if (isNotFound(error)) notFound();
     throw error;
   }
   return project.phase === "ready" ? <ReviewWorkspace initialCaseId={query.case} project={project} /> : <AnalysisWorkspace initialProject={project} />;

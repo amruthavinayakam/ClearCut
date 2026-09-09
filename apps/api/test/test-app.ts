@@ -26,6 +26,7 @@ export async function createTestApi(overrides: TestApiOverrides = {}) {
     maxUploadBytes: 2_000_000,
     mockResearch: true,
     researchConcurrency: 4,
+    caseResearchTimeoutMs: 300_000,
     googleApiKey: "",
     geminiModel: "gemini-3.8-flash",
     googleCloudProject: "",
