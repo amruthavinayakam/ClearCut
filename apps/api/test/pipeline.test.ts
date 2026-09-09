@@ -46,6 +46,7 @@ describe("analysis orchestration", () => {
       parallel,
       events,
       researchConcurrency: 2,
+    caseResearchTimeoutMs: 300_000,
     });
 
     await orchestrator.run(project.id);

@@ -48,7 +48,7 @@ async function mapConcurrent<T>(values: T[], limit: number, work: (value: T) => 
  * returned by now is an outlier, and an outlier should become a visible gap
  * rather than an open-ended wait.
  */
-const CASE_RESEARCH_TIMEOUT_MS = 8 * 60_000;
+const CASE_RESEARCH_TIMEOUT_MS = 5 * 60_000;
 
 function withDeadline<T>(work: Promise<T>, milliseconds: number, message: string): Promise<T> {
   let timer: ReturnType<typeof setTimeout>;

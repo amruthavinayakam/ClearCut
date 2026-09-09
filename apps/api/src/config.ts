@@ -8,6 +8,7 @@ export type ApiConfig = {
   maxUploadBytes: number;
   mockResearch: boolean;
   researchConcurrency: number;
+  caseResearchTimeoutMs: number;
   googleApiKey: string;
   geminiModel: string;
   googleCloudProject: string;
@@ -41,6 +42,11 @@ export function readConfig(env: Record<string, string | undefined> = process.env
     // 16 workers cost two full waves for the sake of three cases; a ceiling
     // above a typical production's case count keeps it to one.
     researchConcurrency: positiveInteger(env.RESEARCH_CONCURRENCY, 32),
+    // The real control over how long a production takes. Cases run in one wave,
+    // so the total is set by the slowest of them, and Parallel's latency varies
+    // widely run to run — measured between 100s and 248s for comparable work,
+    // with tails beyond that. Lower this to cap the wait and accept more gaps.
+    caseResearchTimeoutMs: positiveInteger(env.CASE_RESEARCH_TIMEOUT_MS, 5 * 60_000),
     googleApiKey: env.GOOGLE_API_KEY?.trim() ?? "",
     geminiModel: env.GEMINI_MODEL?.trim() ?? "gemini-3.8-flash",
     // Set GOOGLE_CLOUD_PROJECT to bill Gemini through Vertex AI on the project's

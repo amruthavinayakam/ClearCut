@@ -84,6 +84,7 @@ Fixture mode is explicit and every human-facing fixture value is prefixed `MOCK:
 | `PARALLEL_PROCESSOR` | `base` | Structured Task processor. `lite` is faster still, `core` and `pro` research deeper and take considerably longer |
 | `PARALLEL_MONITOR_PROCESSOR` | `lite` | Monitor processor |
 | `RESEARCH_CONCURRENCY` | `32` | Concurrent per-case research jobs |
+| `CASE_RESEARCH_TIMEOUT_MS` | `300000` | Cap on one case's research. The slowest case sets the production's total time |
 | `MOCK_RESEARCH` | `false` | Use deterministic fixture integrations instead of live providers |
 | `ASSET_STORAGE_DIR` | `.clearcut/assets` | Local opaque asset store |
 | `FFPROBE_PATH` | `ffprobe` | Media probe binary |

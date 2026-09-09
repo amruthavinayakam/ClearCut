@@ -18,6 +18,7 @@ export type OrchestratorDependencies = {
   parallel: ParallelClient;
   events: ProjectEventBus;
   researchConcurrency: number;
+  caseResearchTimeoutMs: number;
 };
 
 function activity(phase: string, message: string, detail: Record<string, unknown> = {}): ActivityEvent {
@@ -87,6 +88,7 @@ export class ProjectOrchestrator {
           parallel: this.dependencies.parallel,
           events: this.dependencies.events,
           concurrency: this.dependencies.researchConcurrency,
+          caseTimeoutMs: this.dependencies.caseResearchTimeoutMs,
         });
       }
 

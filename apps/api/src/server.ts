@@ -54,6 +54,7 @@ const orchestrator = new ProjectOrchestrator({
   parallel,
   events,
   researchConcurrency: config.researchConcurrency,
+    caseResearchTimeoutMs: config.caseResearchTimeoutMs,
 });
 const app = createApp({
   config, repository, assetStore, monitors, events, gemini, parallel,
