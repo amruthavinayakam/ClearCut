@@ -67,7 +67,12 @@ export function ScrollFade({
 
   return (
     <div className={cn("relative min-h-0", className)} ref={wrapper}>
-      <div className={cn("no-scrollbar", viewportClassName)} onScroll={schedule} ref={viewport}>
+      {/* `relative` on the *viewport* is load-bearing, not decoration: an
+          absolutely positioned descendant is clipped only by an ancestor that
+          is both positioned and clipping. The overflow lives here, so the
+          position has to as well — with it on the wrapper instead, every
+          sr-only label inside a long list escapes and stretches the page. */}
+      <div className={cn("relative no-scrollbar", viewportClassName)} onScroll={schedule} ref={viewport}>
         {children}
       </div>
       <span
