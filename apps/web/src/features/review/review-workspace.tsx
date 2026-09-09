@@ -39,7 +39,7 @@ export function ReviewWorkspace({ project, initialCaseId }: { project: Project; 
       <header className="flex min-h-16 shrink-0 flex-wrap items-center justify-between gap-3 border-b border-border px-3 py-2">
         <div className="flex min-w-0 items-center gap-3">
           <Link aria-label="Back to productions" className={buttonVariants({ size: "icon-sm", variant: "ghost" })} href="/"><ChevronLeft /></Link>
-          <div className="min-w-0"><h1 className="truncate text-sm font-medium">{project.title}</h1><p className="mt-0.5 text-[11px] text-muted-foreground">{project.items.length} cases · {project.summary.total_citations} citations · {project.summary.resolved_items} resolved</p></div>
+          <div className="min-w-0"><h1 className="truncate text-sm font-medium">{project.title}</h1><p className="mt-0.5 text-[11px] text-muted-foreground">{project.items.length} cases · {project.summary.decided_items} decided · {project.summary.resolved_items} resolved</p></div>
         </div>
         <div className="flex items-center gap-1">
           <CopilotSheet projectId={project.id} />

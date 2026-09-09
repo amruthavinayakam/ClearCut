@@ -9,6 +9,7 @@ import { MonitorControl } from "@/features/monitoring/monitor-control";
 
 import { CaseFacts } from "./case-facts";
 import { CategoryIcon } from "./category-icon";
+import { DecisionHistory } from "./decision-history";
 import { HumanDisposition } from "./human-disposition";
 import { SourceLedger } from "./source-ledger";
 import { RISK_LABEL, STATUS_LABEL } from "./vocabulary";
@@ -41,24 +42,23 @@ export function EvidenceInspector({ projectId, item }: { projectId: string; item
       </div>
 
       <Tabs className="flex min-h-0 flex-1 flex-col" defaultValue="overview">
-        {/* Sized to their labels, and the active rule sits *on* the list's own
-            border rather than floating above it — the primitive's default
-            offset is tuned for a shorter list and left a second, thicker line
-            hanging over the first. */}
-        <TabsList className="h-10 shrink-0 justify-start gap-5 border-b border-border px-4" variant="line">
-          {([
-            { value: "overview", label: "Overview" },
-            { value: "sources", label: "Sources" },
-            { value: "route", label: "Who to ask" },
-            { value: "documents", label: "Files" },
-          ] as const).map((tab) => (
-            <TabsTrigger className="flex-none px-0 after:bottom-[-1px]" key={tab.value} value={tab.value}>{tab.label}</TabsTrigger>
-          ))}
+        {/* `w-full` is the only change the line variant needs: its triggers are
+            already flex-1, so they divide the panel between them. The variant
+            draws the active tab's rule into the gap the Tabs root leaves below
+            the list — adding a border here put a second, competing rule under
+            every tab. */}
+        <TabsList className="w-full shrink-0" variant="line">
+          <TabsTrigger value="overview">Overview</TabsTrigger>
+          <TabsTrigger value="sources">Sources</TabsTrigger>
+          <TabsTrigger value="route">Who to ask</TabsTrigger>
+          <TabsTrigger value="documents">Files</TabsTrigger>
         </TabsList>
 
         <ScrollFade className="flex-1" viewportClassName="h-full xl:overflow-y-auto">
           <TabsContent className="p-4" value="overview">
             <CaseFacts item={item} />
+
+            <DecisionHistory item={item} />
 
             <div className="mt-4 rounded-xl bg-muted/50 p-3.5 shadow-[inset_0_0_0_1px_oklch(0_0_0/0.04)]">
               <p className="text-[11px] font-medium">What to do next</p>
