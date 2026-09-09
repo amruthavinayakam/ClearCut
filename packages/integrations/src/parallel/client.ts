@@ -86,7 +86,7 @@ export class FixtureParallelClient implements ParallelClient {
     })];
   }
 
-  async buildDossier(item: ClearanceItem, _productionTitle: string, _sources: EvidenceSource[]) {
+  async buildDossier(item: ClearanceItem, _productionTitle: string, _sources: EvidenceSource[], _signal?: AbortSignal) {
     this.calls.push({ operation: "dossier", itemId: item.id });
     if (isVerifiedSample(_productionTitle)) {
       const { dossier, sources } = await verifiedCase(item.name);
@@ -188,14 +188,14 @@ export class LiveParallelClient implements ParallelClient {
     });
   }
 
-  async buildDossier(item: ClearanceItem, productionTitle: string, sources: EvidenceSource[]) {
+  async buildDossier(item: ClearanceItem, productionTitle: string, sources: EvidenceSource[], signal?: AbortSignal) {
     const params = {
       input: dossierInput(item, productionTitle, sources),
       processor: this.#processor,
       task_spec: { output_schema: { type: "json" as const, json_schema: DossierSchema.omit({ run_id: true, basis: true }).toJSONSchema() } },
       metadata: { item_id: item.id, category: item.category, project: "clearcut" },
     };
-    const created = await this.#call("task_create", params, (client) => client.taskRun.create(params)) as { run_id?: string };
+    const created = await this.#call("task_create", params, (client) => client.taskRun.create(params, { signal })) as { run_id?: string };
     if (!created.run_id) throw new Error("Parallel Task did not return a run_id.");
     const runId = created.run_id;
     // `/result` holds the connection open until the run finishes, which for the
@@ -209,7 +209,7 @@ export class LiveParallelClient implements ParallelClient {
       (client) => client.taskRun.result(
         runId,
         { timeout: TASK_RESULT_WAIT_SECONDS },
-        { timeout: (TASK_RESULT_WAIT_SECONDS + 30) * 1_000, maxRetries: 2 },
+        { timeout: (TASK_RESULT_WAIT_SECONDS + 30) * 1_000, maxRetries: 2, signal },
       ),
     ) as { output?: { content?: unknown; basis?: unknown } };
     const content = typeof result.output?.content === "string"
