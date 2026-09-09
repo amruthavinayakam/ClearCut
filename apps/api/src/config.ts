@@ -4,11 +4,13 @@ export type ApiConfig = {
   host: string;
   port: number;
   assetStorageDir: string;
+  projectStorageDir: string;
   ffprobePath: string;
   maxUploadBytes: number;
   mockResearch: boolean;
   researchConcurrency: number;
-  caseResearchTimeoutMs: number;
+  researchDepth: "fast" | "deep";
+  caseResearchTimeoutMs: number | null;
   googleApiKey: string;
   geminiModel: string;
   googleCloudProject: string;
@@ -34,19 +36,24 @@ export function readConfig(env: Record<string, string | undefined> = process.env
     host: env.HOST ?? "127.0.0.1",
     port: positiveInteger(env.PORT, 3001),
     assetStorageDir: resolve(env.ASSET_STORAGE_DIR ?? ".clearcut/assets"),
+    projectStorageDir: resolve(env.PROJECT_STORAGE_DIR ?? ".clearcut/projects"),
     ffprobePath: env.FFPROBE_PATH ?? "ffprobe",
     maxUploadBytes: positiveInteger(env.MAX_UPLOAD_BYTES, 200 * 1024 * 1024),
     mockResearch: env.MOCK_RESEARCH?.toLocaleLowerCase() === "true",
-    // A `core` Task run measures around four minutes, so wall-clock time is
-    // set by how many waves the pool needs, not by throughput. 19 cases against
-    // 16 workers cost two full waves for the sake of three cases; a ceiling
-    // above a typical production's case count keeps it to one.
+    // Cases research in one wave, so wall-clock time is set by the slowest of
+    // them rather than by throughput. A ceiling above a typical production's
+    // case count keeps it to a single wave.
     researchConcurrency: positiveInteger(env.RESEARCH_CONCURRENCY, 32),
-    // The real control over how long a production takes. Cases run in one wave,
-    // so the total is set by the slowest of them, and Parallel's latency varies
-    // widely run to run — measured between 100s and 248s for comparable work,
-    // with tails beyond that. Lower this to cap the wait and accept more gaps.
-    caseResearchTimeoutMs: positiveInteger(env.CASE_RESEARCH_TIMEOUT_MS, 5 * 60_000),
+    // `fast` retrieves with Parallel Search and reasons over the results with a
+    // Gemini agent, which is seconds per case. `deep` hands each case to a
+    // Parallel Task that searches again on its own: a richer basis, at 100-250s
+    // per case with tails well past that. Interactive review needs the former.
+    researchDepth: env.RESEARCH_DEPTH?.trim() === "deep" ? "deep" : "fast",
+    // Null means the depth's own budget applies. Set it to cap the wait
+    // explicitly and accept more cases landing as recorded gaps.
+    caseResearchTimeoutMs: Number.isInteger(Number(env.CASE_RESEARCH_TIMEOUT_MS)) && Number(env.CASE_RESEARCH_TIMEOUT_MS) > 0
+      ? Number(env.CASE_RESEARCH_TIMEOUT_MS)
+      : null,
     googleApiKey: env.GOOGLE_API_KEY?.trim() ?? "",
     geminiModel: env.GEMINI_MODEL?.trim() ?? "gemini-3.8-flash",
     // Set GOOGLE_CLOUD_PROJECT to bill Gemini through Vertex AI on the project's
