@@ -17,8 +17,29 @@ import { cn } from "@/lib/utils";
 
 type Anchor = { item: ClearanceItem; excerpt: string };
 
+/** Scene text usually opens with its own slug line, which the heading already shows. */
+function withoutRepeatedHeading(text: string, heading: string): string {
+  const [first, ...rest] = text.split("\n");
+  return first?.trim().toLocaleLowerCase() === heading.trim().toLocaleLowerCase() ? rest.join("\n").trimStart() : text;
+}
+
 function escapeForRegExp(value: string): string {
   return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+}
+
+/**
+ * An excerpt matched across the line breaks of a screenplay page.
+ *
+ * The model quotes the line as prose — "It has been there longer than she
+ * has." — while the page it came from wraps that sentence over two lines. A
+ * literal search therefore misses every multi-line excerpt, which on a real
+ * screenplay is most of them. Matching whitespace to whitespace fixes it: on
+ * the sample production it takes the highlights from none of three to all
+ * three.
+ */
+function excerptPattern(excerpt: string): RegExp {
+  const words = excerpt.trim().split(/\s+/).map(escapeForRegExp);
+  return new RegExp(words.join("\\s+"), "i");
 }
 
 /**
@@ -27,7 +48,7 @@ function escapeForRegExp(value: string): string {
  * Excerpts come from the model and are not guaranteed to be exact substrings,
  * so a miss has to leave the text intact rather than drop it.
  */
-function markScene(text: string, anchors: Anchor[]): Array<{ text: string; item: ClearanceItem | null }> {
+export function markScene(text: string, anchors: Anchor[]): Array<{ text: string; item: ClearanceItem | null }> {
   const usable = anchors.filter((anchor) => anchor.excerpt.trim().length > 3);
   if (usable.length === 0) return [{ text, item: null }];
 
@@ -36,7 +57,7 @@ function markScene(text: string, anchors: Anchor[]): Array<{ text: string; item:
   let segments: Array<{ text: string; item: ClearanceItem | null }> = [{ text, item: null }];
 
   for (const anchor of ordered) {
-    const pattern = new RegExp(escapeForRegExp(anchor.excerpt.trim()), "i");
+    const pattern = excerptPattern(anchor.excerpt);
     segments = segments.flatMap((segment) => {
       if (segment.item) return [segment];
       const match = pattern.exec(segment.text);
@@ -148,7 +169,7 @@ export function ScriptWorkspace({
                 {scene.page !== null && <span className="ml-auto shrink-0 text-[9px] font-normal tabular-nums text-muted-foreground">p.{scene.page}</span>}
               </h3>
               <p className="whitespace-pre-wrap text-foreground/90">
-                {markScene(scene.text, anchors).map((segment, index) => {
+                {markScene(withoutRepeatedHeading(scene.text, scene.heading), anchors).map((segment, index) => {
                   const item = segment.item;
                   if (!item) return <span key={index}>{segment.text}</span>;
                   const active = item.id === selectedId;
